@@ -1,16 +1,17 @@
 import sys, os, re, datetime, json
-from utils import read_transactions, read_alfa
+from utils import read_transactions, read_alfa, named_dict
 import argparse, logging
 from collections import namedtuple, defaultdict
 from typing import List, DefaultDict, Dict, Union
-from mypy_extensions import TypedDict
+# from mypy_extensions import TypedDict
 
-uni_t = namedtuple('uni_t', ['account', 'date', 'amount', 'currency', 'category', 'src'])
+uni_t = named_dict('uni_t', ['account', 'date', 'amount', 'currency', 'category', 'src'])
 
-class list_and_float_t:
+class list_and_float_t(dict):
     def __init__(self, v=0., trs=[]):
         self.v : float = v
         self.trs : List[uni_t] = trs
+        super().__init__(self.__dict__)
 
     def __add__(self, o):
         return list_and_float_t(self.v + o.v, self.trs + o.trs)
@@ -114,17 +115,6 @@ class Main:
             'spent_total' : spent_total
             }
 
-    def sanitize(self, en):
-        if isinstance(en, list_and_float_t):
-            return list_and_float_t(en.v, self.sanitize(en.trs))
-        if isinstance(en, list):
-            return [self.sanitize(e) for e in en]
-        elif isinstance(en, dict):
-            return { k : self.sanitize(v) for k,v in en.items()}
-        elif hasattr(en, '_fields'):
-            return { k : self.sanitize(v) for k,v in zip(en._fields, en)}
-        return en
-
     def go(self):
         en = self.read_datadir()
         en = self.to_unified_rec(en)
@@ -134,15 +124,15 @@ class Main:
         def sterilize(obj):
             if isinstance(obj, datetime.datetime):
                 return str(obj)
-            return vars(obj)
+            assert False, str(type(obj))
 
         with open(self.args.allout, 'w') as f:
-            json.dump(self.sanitize(en), f, indent=4, default=sterilize, ensure_ascii=False)
+            json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)
 
         en = self.group_by_category(en)
 
         with open(self.args.sumout, 'w') as f:
-            json.dump(self.sanitize(en), f, indent=4, default=sterilize, ensure_ascii=False)
+            json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)
 
     @staticmethod
     def main(args):

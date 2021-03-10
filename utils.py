@@ -1,7 +1,19 @@
 import csv,re, datetime, os
-from collections import namedtuple
 
-rec_t = namedtuple('rec_t', ['date', 'op', 'amount', 'currency', 'amount_byn', 'category', 'filename', 'lineno'])
+# json -friendly named tuple
+def named_dict(typename, fieldnames):
+
+    def ctor(self, *args):
+        for k,v in zip(self._fields, args):
+            setattr(self,k, v)
+        super(self.__class__, self).__init__(self.__dict__)
+
+    d = {f:None for f in fieldnames}
+    d['__init__'] = ctor
+    d['_fields']  = fieldnames
+    return type(typename, (dict,), d)
+
+rec_t = named_dict('rec_t', ['date', 'op', 'amount', 'currency', 'amount_byn', 'category', 'filename', 'lineno'])
 
 def read_transactions(filename):
     transactions = []
@@ -30,7 +42,7 @@ def read_transactions(filename):
     return transactions
 
 
-alfa_t = namedtuple('alfa_t', ['account_name', 'account_num', 'currency', 'date', 'ref', 'category', 'amount', 'filename', 'lineno'])
+alfa_t = named_dict('alfa_t', ['account_name', 'account_num', 'currency', 'date', 'ref', 'category', 'amount', 'filename', 'lineno'])
 
 def read_alfa(filename):
     transactions = []
