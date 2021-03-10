@@ -63,9 +63,13 @@ class Main:
             #['date', 'amount', 'currency', 'category', 'src']
             for tr in trs:
                 if _type in ['rub', 'credit']:
-                    yield uni_t(_type, tr.date, tr.amount, tr.currency, tr.category, tr)
+                    cat = tr.category
                 else:
-                    yield uni_t(_type, tr.date, tr.amount, tr.currency, tr.op, tr)
+                    cat = tr.op
+                tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
+                cat = self.get_category(tr)
+                tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
+                yield tr
 
     def filter_by_date(self, en : List[uni_t]):
         min_date = None
@@ -95,17 +99,32 @@ class Main:
             yield tr
 
     def get_category(self, tr : uni_t):
+
+        if tr.amount > 0:
+            return 'income'
+
         cat_defs = {
-            'sadik' : [r'Парфенов\s+Сергей']
+            'sadik' : [r'Парфенов\s+Сергей'],
+            'kv' : [r'в пользу"ЧЕЛЯБИНВЕСТБАНК"'],
+            'kv_otop' : [r'RU GOROD74.RU'],
+            'cash' : [r'Alfa Iss'],
+            'taxi' : [r'TAXI'],
+            'eats' : [r'MAGNIT', r'PYATEROCHKA'],
+            'to KATE' : [r'на \+79511286005'],
+            'gas' : [r'GAZPROMNEFT'],
+            'to RUB' : [r'P2P_SDBO_INTERNATIONAL'],
+            'to BYN' : [r'P2P SDBO NO FEE'],
+            'Kate eats' : [r'STOLOVAYA VILKA'],
         }
+
         for cat, regs in cat_defs.items():
             for reg in regs:
+                # print(reg)
                 ret = re.search(reg, tr.category)
+                # print(ret, tr.category == ss)
                 if ret:
                     return cat
-            if tr.amount > 0:
-                return 'income'
-            return 'other'
+        return 'other'
 
     def group_by_category(self, en : List[uni_t]):
         # ValueOrlistDict = TypedDict('ValueOrlistDict', {
@@ -117,8 +136,7 @@ class Main:
             defaultdict(lambda: defaultdict(lambda: defaultdict(float_and_list_t)))
 
         for tr in en:
-            cat = self.get_category(tr)
-            summary[cat][tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
+            summary[tr.category][tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
 
         cat_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
         acc_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
