@@ -4,17 +4,18 @@ import argparse, logging
 from collections import namedtuple, defaultdict
 from typing import List, DefaultDict, Dict, Union
 # from mypy_extensions import TypedDict
+from tabulate import tabulate
 
 uni_t = named_dict('uni_t', ['account', 'date', 'amount', 'currency', 'category', 'src'])
 
-class list_and_float_t(dict):
+class float_and_list_t(dict):
     def __init__(self, v=0., trs=[]):
         self.v : float = v
         self.trs : List[uni_t] = trs
         super().__init__(self.__dict__)
 
     def __add__(self, o):
-        return list_and_float_t(self.v + o.v, self.trs + o.trs)
+        return float_and_list_t(self.v + o.v, self.trs + o.trs)
 
 class Main:
     @staticmethod
@@ -22,7 +23,10 @@ class Main:
         parser = argparse.ArgumentParser()
         parser.add_argument('csvdir')
         parser.add_argument('--debug', action='store_true')
-        parser.add_argument('--days_ago', type=int)
+        parser.add_argument('--days_after', type=int)
+        parser.add_argument('--days_before', type=int)
+        parser.add_argument('--after',  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
+        parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--allout', default="transactions.json")
         parser.add_argument('--sumout', default="summary.json")
         return parser
@@ -55,20 +59,40 @@ class Main:
                     raise
 
     def to_unified_rec(self, en):
-        if self.args.days_ago is not None:
-            min_date = datetime.today() - datetime.timedelta(days=self.args.days_ago)
-            self.logger.info(f"min_date {min_date}")
-
         for _type, trs in en:
             #['date', 'amount', 'currency', 'category', 'src']
             for tr in trs:
-                if self.args.days_ago is not None:
-                    if tr.date < min_date:
-                        continue
                 if _type in ['rub', 'credit']:
                     yield uni_t(_type, tr.date, tr.amount, tr.currency, tr.category, tr)
                 else:
                     yield uni_t(_type, tr.date, tr.amount, tr.currency, tr.op, tr)
+
+    def filter_by_date(self, en : List[uni_t]):
+        min_date = None
+        max_date = None
+        if self.args.days_after is not None:
+            min_date = datetime.datetime.today() - datetime.timedelta(days=self.args.days_after)
+        if self.args.after is not None:
+            min_date = self.args.after
+
+        if self.args.days_before is not None:
+            max_date = datetime.datetime.today() - datetime.timedelta(days=self.args.days_before)
+        if self.args.before is not None:
+            max_date = self.args.before
+
+        if min_date is not None:
+            self.logger.info(f"min_date {min_date}")
+        if max_date is not None:
+            self.logger.info(f"max_date {max_date}")
+
+        for tr in en:
+            if min_date is not None:
+                if tr.date <= min_date:
+                    continue
+            if max_date is not None:
+                if tr.date >= max_date:
+                    continue
+            yield tr
 
     def get_category(self, tr : uni_t):
         cat_defs = {
@@ -89,24 +113,24 @@ class Main:
         #         'trs' : List[uni_t]
         #     })
 
-        summary : DefaultDict[str,DefaultDict[str, DefaultDict[str, list_and_float_t]]] = \
-            defaultdict(lambda: defaultdict(lambda: defaultdict(list_and_float_t)))
+        summary : DefaultDict[str,DefaultDict[str, DefaultDict[str, float_and_list_t]]] = \
+            defaultdict(lambda: defaultdict(lambda: defaultdict(float_and_list_t)))
 
         for tr in en:
             cat = self.get_category(tr)
-            summary[cat][tr.account][tr.currency].v += tr.amount
-            summary[cat][tr.account][tr.currency].trs += [tr]
+            summary[cat][tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
 
-        cat_totals : DefaultDict[str,DefaultDict[str,list_and_float_t]] = defaultdict(lambda: defaultdict(list_and_float_t))
-        acc_totals : DefaultDict[str,DefaultDict[str,list_and_float_t]] = defaultdict(lambda: defaultdict(list_and_float_t))
-        spent_total : DefaultDict[str,list_and_float_t] = defaultdict(list_and_float_t)
+        cat_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
+        acc_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
+        spent_total : DefaultDict[str,float_and_list_t] = defaultdict(float_and_list_t)
 
         for cat, accd in summary.items():
-            for acc, curd in accd.items():
-                for cur, v in curd.items():
-                    cat_totals[cat][cur] += v
-                    acc_totals[acc][cur] += v
-                    spent_total[cur] += v if cat != 'income' else list_and_float_t()
+            if cat != 'income':
+                for acc, curd in accd.items():
+                    for cur, v in curd.items():
+                        cat_totals[cat][cur] += v
+                        acc_totals[acc][cur] += v
+                        spent_total[cur] += v
 
         return {
             'summary' : summary, 
@@ -115,9 +139,32 @@ class Main:
             'spent_total' : spent_total
             }
 
+    def printable_summary(self, en):
+        by_acc_cur = {
+            cat : {
+                f"{acc}_{cur}" : f"{v.v:6.0f}" for acc, curd in accd.items() for cur, v in curd.items()
+            } for cat, accd in en['summary'].items()
+        }
+        for cat, curd in en['cat_totals'].items():
+            by_acc_cur[cat]['total'] = { cur : f"{v.v:6.0f}" for cur, v in curd.items() }
+
+        total_by_acc = {f"{acc}_{cur}" : f"{v.v:6.0f}" for acc, accd in en['acc_totals'].items() for cur, v in accd.items()}
+        total_by_acc['total'] = {cur : f"{v.v:6.0f}" for cur, v in en['spent_total'].items()}
+
+        acc_curs = ['usd_USD','usd_BYN', 'byn_BYN','usd_RUB','byn_RUB','rub_RUB','credit_RUB', 'total']
+        headers = ['cat'] + acc_curs
+        _sum = [
+            [cat] + [accurd.get(acc_cur, '') for acc_cur in acc_curs] \
+                for cat, accurd in sorted(by_acc_cur.items(), key=lambda kv: kv[0])
+        ]
+        _sum += [['total'] + [total_by_acc.get(acc_cur, '') for acc_cur in acc_curs]]
+
+        return tabulate(_sum, headers=headers)
+
     def go(self):
         en = self.read_datadir()
         en = self.to_unified_rec(en)
+        en = self.filter_by_date(en)
         en = list(en)
         en = sorted(en, key=lambda tr: tr.date)
 
@@ -130,6 +177,8 @@ class Main:
             json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)
 
         en = self.group_by_category(en)
+
+        print(self.printable_summary(en))
 
         with open(self.args.sumout, 'w') as f:
             json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)

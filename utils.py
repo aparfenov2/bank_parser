@@ -56,7 +56,7 @@ def read_alfa(filename):
                 if len(account_name) == 0:
                     continue
                 account_num  = row['Номер счета']
-                currency     = row['Валюта']
+                currency     = row['Валюта'].replace('RUR','RUB')
                 tstamp       = datetime.datetime.strptime(row['Дата операции'], '%d.%m.%y')
                 ref          = row['Референс проводки']
                 category     = row['Описание операции']
