@@ -30,7 +30,7 @@ class Main:
         parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--allout', default="transactions.json")
         parser.add_argument('--sumout', default="summary.json")
-        parser.add_argument('--bydayout', default="trs_by_day.json")
+        parser.add_argument('--bydayout', default="expenses_by_day.json")
 
         return parser
 
@@ -101,6 +101,11 @@ class Main:
                     continue
             yield tr
 
+    def filter_transfers(self, en):
+        for tr in en:
+            if tr.category not in ['income','to BYN', 'to RUB', 'to CREDIT']:
+                yield tr
+
     def get_category(self, tr : uni_t):
 
         if tr.amount > 0:
@@ -148,12 +153,11 @@ class Main:
         acc_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
         spent_total : DefaultDict[str,float_and_list_t] = defaultdict(float_and_list_t)
 
-        for tr in en:
-            if tr.category not in ['income','to BYN', 'to RUB', 'to CREDIT']:
-                cat_totals[tr.category][tr.currency] += float_and_list_t(tr.amount, [tr])
-                acc_totals[tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
-                spent_total[tr.currency] += float_and_list_t(tr.amount, [tr])
-                
+        for tr in self.filter_transfers(en):
+            cat_totals[tr.category][tr.currency] += float_and_list_t(tr.amount, [tr])
+            acc_totals[tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
+            spent_total[tr.currency] += float_and_list_t(tr.amount, [tr])
+
         return {
             'summary' : summary, 
             'cat_totals' : cat_totals, 
@@ -164,14 +168,14 @@ class Main:
     def printable_summary(self, en):
         by_acc_cur = {
             cat : {
-                f"{acc}_{cur}" : f"{v.v:6.0f}" for acc, curd in accd.items() for cur, v in curd.items()
+                f"{acc}_{cur}" : f"{v.v:6.2f}" for acc, curd in accd.items() for cur, v in curd.items()
             } for cat, accd in en['summary'].items()
         }
         for cat, curd in en['cat_totals'].items():
-            by_acc_cur[cat]['total'] = { cur : f"{v.v:6.0f}" for cur, v in curd.items() }
+            by_acc_cur[cat]['total'] = { cur : f"{v.v:6.2f}" for cur, v in curd.items() }
 
-        total_by_acc = {f"{acc}_{cur}" : f"{v.v:6.0f}" for acc, accd in en['acc_totals'].items() for cur, v in accd.items()}
-        total_by_acc['total'] = {cur : f"{v.v:6.0f}" for cur, v in en['spent_total'].items()}
+        total_by_acc = {f"{acc}_{cur}" : f"{v.v:6.2f}" for acc, accd in en['acc_totals'].items() for cur, v in accd.items()}
+        total_by_acc['total'] = {cur : f"{v.v:6.2f}" for cur, v in en['spent_total'].items()}
 
         acc_curs = ['usd_USD','usd_BYN', 'byn_BYN','usd_RUB','byn_RUB','rub_RUB','credit_RUB', 'total']
         headers = ['cat'] + acc_curs
@@ -184,12 +188,12 @@ class Main:
         return tabulate(_sum, headers=headers)
 
     def speed_by_day(self, en):
-        ret = defaultdict(float)
+        ret = defaultdict(lambda: defaultdict(float))
         for tr in en:
-            ret[tr.date.date()] += min(tr.amount, 0)
+            ret[tr.date.date()][tr.currency] += min(tr.amount, 0)
         return ret
 
-    def trs_by_day(self, en):
+    def expenses_by_day(self, en):
         ret = defaultdict(list)
         for tr in en:
             ret[tr.date.date()] += [tr]
@@ -198,7 +202,12 @@ class Main:
     def printable_speed(self, spd):
         headers = [''] + [d.day for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + ['avg_7']
         d_minus_7 = max(spd.keys()) - datetime.timedelta(days=7)
-        row = [['by day'] + [v for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + [np.mean([v for d,v in spd.items() if d > d_minus_7])]]
+        all_curs = {cur for d, curd in spd.items() for cur,v in curd.items()}
+        def _make_row(_cur):
+            return [f'by day,{_cur}'] + \
+            [v for d,curd in sorted(spd.items(), key=lambda kv: kv[0]) for cur, v in curd.items() if cur == _cur] + \
+            [np.mean([v for d, curd in spd.items() if d > d_minus_7 for cur,v in curd.items() if cur == _cur])]
+        row = [ _make_row(_cur) for _cur in all_curs] 
         return tabulate(row, headers=headers)
 
     def sterilize(self, obj):
@@ -213,20 +222,23 @@ class Main:
         en = list(en)
         en = sorted(en, key=lambda tr: tr.date)
 
-        spd = self.speed_by_day(en)
-        trs_by_day = [(str(d),trs) for d, trs in sorted(self.trs_by_day(en).items(), key=lambda kv: kv[0])]
-
-        with open(self.args.bydayout, 'w') as f:
-            json.dump(trs_by_day, f, indent=4, default=self.sterilize, ensure_ascii=False)
-
-        print(self.printable_speed(spd))
-        print('\n')
-
         with open(self.args.allout, 'w') as f:
             json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
-        en = self.group_by_category(en)
+        en_no_tr = self.filter_transfers(en)
+        en_no_tr = list(en_no_tr)
 
+        expenses_by_day = self.expenses_by_day(en_no_tr)
+        expenses_by_day = [(str(d),trs) for d, trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+
+        with open(self.args.bydayout, 'w') as f:
+            json.dump(expenses_by_day, f, indent=4, default=self.sterilize, ensure_ascii=False)
+
+        spd = self.speed_by_day(en_no_tr)
+        print(self.printable_speed(spd))
+        print('\n')
+
+        en = self.group_by_category(en)
         print(self.printable_summary(en))
 
         with open(self.args.sumout, 'w') as f:
