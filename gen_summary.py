@@ -148,14 +148,12 @@ class Main:
         acc_totals : DefaultDict[str,DefaultDict[str,float_and_list_t]] = defaultdict(lambda: defaultdict(float_and_list_t))
         spent_total : DefaultDict[str,float_and_list_t] = defaultdict(float_and_list_t)
 
-        for cat, accd in summary.items():
-            if cat not in ['income','to BYN', 'to RUB', 'to CREDIT']:
-                for acc, curd in accd.items():
-                    for cur, v in curd.items():
-                        cat_totals[cat][cur] += v
-                        acc_totals[acc][cur] += v
-                        spent_total[cur] += v
-
+        for tr in en:
+            if tr.category not in ['income','to BYN', 'to RUB', 'to CREDIT']:
+                cat_totals[tr.category][tr.currency] += float_and_list_t(tr.amount, [tr])
+                acc_totals[tr.account][tr.currency] += float_and_list_t(tr.amount, [tr])
+                spent_total[tr.currency] += float_and_list_t(tr.amount, [tr])
+                
         return {
             'summary' : summary, 
             'cat_totals' : cat_totals, 
