@@ -5,6 +5,7 @@ from collections import namedtuple, defaultdict
 from typing import List, DefaultDict, Dict, Union
 # from mypy_extensions import TypedDict
 from tabulate import tabulate
+import numpy as np
 
 uni_t = named_dict('uni_t', ['account', 'date', 'amount', 'currency', 'category', 'src'])
 
@@ -66,8 +67,8 @@ class Main:
                     cat = tr.category
                 else:
                     cat = tr.op
-                tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
-                cat = self.get_category(tr)
+                _tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
+                cat = self.get_category(_tr)
                 tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
                 yield tr
 
@@ -108,12 +109,15 @@ class Main:
             'kv' : [r'в пользу"ЧЕЛЯБИНВЕСТБАНК"'],
             'kv_otop' : [r'RU GOROD74.RU'],
             'cash' : [r'Alfa Iss'],
+            'dolina' : [r'DOLINA'],
+            'molnia' : [r'MOLNIA'],
             'taxi' : [r'TAXI'],
             'eats' : [r'MAGNIT', r'PYATEROCHKA'],
             'to KATE' : [r'на \+79511286005'],
             'gas' : [r'GAZPROMNEFT'],
             'to RUB' : [r'P2P_SDBO_INTERNATIONAL'],
             'to BYN' : [r'P2P SDBO NO FEE'],
+            'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
             'Kate eats' : [r'STOLOVAYA VILKA'],
         }
 
@@ -143,7 +147,7 @@ class Main:
         spent_total : DefaultDict[str,float_and_list_t] = defaultdict(float_and_list_t)
 
         for cat, accd in summary.items():
-            if cat != 'income':
+            if cat not in ['income','to BYN', 'to RUB', 'to CREDIT']:
                 for acc, curd in accd.items():
                     for cur, v in curd.items():
                         cat_totals[cat][cur] += v
@@ -173,11 +177,23 @@ class Main:
         headers = ['cat'] + acc_curs
         _sum = [
             [cat] + [accurd.get(acc_cur, '') for acc_cur in acc_curs] \
-                for cat, accurd in sorted(by_acc_cur.items(), key=lambda kv: kv[0])
+                for cat, accurd in [('income',by_acc_cur['income'])] + sorted([(k,v) for k,v in by_acc_cur.items() if k != 'income'], key=lambda kv: kv[0])
         ]
         _sum += [['total'] + [total_by_acc.get(acc_cur, '') for acc_cur in acc_curs]]
 
         return tabulate(_sum, headers=headers)
+
+    def speed_by_day(self, en):
+        ret = defaultdict(float)
+        for tr in en:
+            ret[tr.date.date()] += min(tr.amount, 0)
+        return ret
+
+    def printable_speed(self, spd):
+        headers = [''] + [d.day for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + ['avg_7']
+        d_minus_7 = max(spd.keys()) - datetime.timedelta(days=7)
+        row = [['by day'] + [v for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + [np.mean([v for d,v in spd.items() if d > d_minus_7])]]
+        return tabulate(row, headers=headers)
 
     def go(self):
         en = self.read_datadir()
@@ -185,6 +201,10 @@ class Main:
         en = self.filter_by_date(en)
         en = list(en)
         en = sorted(en, key=lambda tr: tr.date)
+
+        spd = self.speed_by_day(en)
+        print(self.printable_speed(spd))
+        print('\n')
 
         def sterilize(obj):
             if isinstance(obj, datetime.datetime):
