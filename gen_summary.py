@@ -30,6 +30,8 @@ class Main:
         parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--allout', default="transactions.json")
         parser.add_argument('--sumout', default="summary.json")
+        parser.add_argument('--bydayout', default="trs_by_day.json")
+
         return parser
 
     def  __init__(self, args):
@@ -112,11 +114,11 @@ class Main:
             'dolina' : [r'DOLINA'],
             'molnia' : [r'MOLNIA'],
             'taxi' : [r'TAXI'],
-            'eats' : [r'MAGNIT', r'PYATEROCHKA'],
+            'eats' : [r'MAGNIT', r'PYATEROCHKA',r'Магазины продуктовые'],
             'to KATE' : [r'на \+79511286005'],
-            'gas' : [r'GAZPROMNEFT'],
-            'to RUB' : [r'P2P_SDBO_INTERNATIONAL'],
-            'to BYN' : [r'P2P SDBO NO FEE'],
+            'gas' : [r'GAZPROMNEFT',r'AZS', r'АЗС'],
+            'to RUB' : [r'CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL'],
+            'to BYN' : [r'CH Debit BLR MINSK P2P SDBO NO FEE'],
             'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
             'Kate eats' : [r'STOLOVAYA VILKA'],
         }
@@ -189,11 +191,22 @@ class Main:
             ret[tr.date.date()] += min(tr.amount, 0)
         return ret
 
+    def trs_by_day(self, en):
+        ret = defaultdict(list)
+        for tr in en:
+            ret[tr.date.date()] += [tr]
+        return ret
+
     def printable_speed(self, spd):
         headers = [''] + [d.day for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + ['avg_7']
         d_minus_7 = max(spd.keys()) - datetime.timedelta(days=7)
         row = [['by day'] + [v for d,v in sorted(spd.items(), key=lambda kv: kv[0])] + [np.mean([v for d,v in spd.items() if d > d_minus_7])]]
         return tabulate(row, headers=headers)
+
+    def sterilize(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return str(obj)
+        assert False, str(type(obj))
 
     def go(self):
         en = self.read_datadir()
@@ -203,23 +216,23 @@ class Main:
         en = sorted(en, key=lambda tr: tr.date)
 
         spd = self.speed_by_day(en)
+        trs_by_day = [(str(d),trs) for d, trs in sorted(self.trs_by_day(en).items(), key=lambda kv: kv[0])]
+
+        with open(self.args.bydayout, 'w') as f:
+            json.dump(trs_by_day, f, indent=4, default=self.sterilize, ensure_ascii=False)
+
         print(self.printable_speed(spd))
         print('\n')
 
-        def sterilize(obj):
-            if isinstance(obj, datetime.datetime):
-                return str(obj)
-            assert False, str(type(obj))
-
         with open(self.args.allout, 'w') as f:
-            json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)
+            json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
         en = self.group_by_category(en)
 
         print(self.printable_summary(en))
 
         with open(self.args.sumout, 'w') as f:
-            json.dump(en, f, indent=4, default=sterilize, ensure_ascii=False)
+            json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
     @staticmethod
     def main(args):

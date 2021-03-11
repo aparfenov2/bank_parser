@@ -19,25 +19,65 @@ def read_transactions(filename):
     transactions = []
     # Дата транзакции;Операция;Сумма;Валюта;Дата операции по счету;Комиссия/Money-back;Обороты по счету;Цифровая карта;Категория операции;
 
-    with open(filename, 'r', encoding="windows-1251") as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=';')
+    def lookup_header(lines, reg):
+        for i,l in enumerate(lines):
+            ret = re.search(reg, l)
+            if ret is not None:
+                return i
+        return None
+
+    def read_op_sum(lines, start):
+        csv_reader = csv.DictReader(lines, delimiter=';')
         for lineno, row in enumerate(csv_reader):
-            # ret = re.match(r'Операции по.*?(\d+)', row[0]):
-            if len(row) < 10:
-                # print(row)
+            lineno += start
+            tstamp = datetime.datetime.strptime(row['Дата транзакции'], '%d.%m.%Y %H:%M:%S')
+            op = row['Операция']
+            amount = float(row['Сумма'].replace(',','.').replace(' ',''))
+            currency = row['Валюта']
+            amount_byn = float(row['Обороты по счету'].replace(',','.').replace(' ',''))
+            category = row['Категория операции']
+            if len(category.strip()) == 0:
+                category = op
+            transactions.append(rec_t(tstamp, op, amount, currency, amount_byn, category, os.path.basename(filename), lineno))
+
+    def read_blocked(lines, start):
+        csv_reader = csv.reader(lines, delimiter=';')
+        headers = None
+        for lineno, row in enumerate(csv_reader):
+            if lineno == 0:
+                headers = row
                 continue
-            ret = re.match(r'(\d\d)\.(\d\d)\.(\d\d\d\d) (\d\d)\:(\d\d)\:(\d\d)', row[0])
-            if ret:
-                # print(len(row))
-                tstamp = datetime.datetime.strptime(row[0], '%d.%m.%Y %H:%M:%S')
-                op = row[1]
-                amount = float(row[2].replace(',','.').replace(' ',''))
-                currency = row[3]
-                amount_byn = float(row[-4].replace(',','.').replace(' ',''))
-                category = row[-2]
-                if len(category.strip()) == 0:
-                    category = op
-                transactions.append(rec_t(tstamp, op, amount, currency, amount_byn, category, os.path.basename(filename), lineno))
+            rowh = {k : v for k,v in zip(headers, row)}
+            lineno += start
+            tstamp = datetime.datetime.strptime(rowh['Дата транзакции'], '%d.%m.%Y %H:%M:%S')
+            op = rowh['Транзакция']
+            amount = float(rowh['Сумма транзакции'].replace(',','.').replace(' ',''))
+            currency = row[3]
+            amount_byn = float(rowh['Сумма блокировки'].replace(',','.').replace(' ',''))
+            category = rowh['Категория операции']
+            if len(category.strip()) == 0:
+                category = op
+            transactions.append(rec_t(tstamp, op, -amount, currency, -amount_byn, category, os.path.basename(filename), lineno))
+
+    with open(filename, 'r', encoding="windows-1251") as f:
+        lines = f.readlines()
+
+    start = lookup_header(lines, r'Дата транзакции;Операция;Сумма;')
+    end = lookup_header(lines[start:], r'Всего по контракту;Зачислено;Списано;')
+    end += start
+    read_op_sum(lines[start:end], start)
+
+    start = lookup_header(lines[end:], r'Дата транзакции;Операция;Сумма;')
+    if start is not None:
+        start += end
+        end = lookup_header(lines[start:], r'Всего по контракту;Зачислено;Списано;')
+        end += start
+        read_op_sum(lines[start:end], start)
+
+    start = lookup_header(lines[end:], r'Дата транзакции;Транзакция;Сумма')
+    if start is not None:
+        start += end
+        read_blocked(lines[start:], start)    
 
     return transactions
 
@@ -48,8 +88,8 @@ def read_alfa(filename):
     transactions = []
     # Тип счёта Номер счета Валюта  Дата операции   Референс проводки   Описание операции   Приход  Расход
 
-    with open(filename, 'r', encoding="windows-1251") as csv_file:
-        csv_reader = csv.DictReader(csv_file, delimiter=';')
+    with open(filename, 'r', encoding="windows-1251") as f:
+        csv_reader = csv.DictReader(f, delimiter=';')
         for lineno, row in enumerate(csv_reader):
             try:
                 account_name = row['Тип счёта']
