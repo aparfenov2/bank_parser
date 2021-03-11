@@ -36,8 +36,6 @@ def read_transactions(filename):
             currency = row['Валюта']
             amount_byn = float(row['Обороты по счету'].replace(',','.').replace(' ',''))
             category = row['Категория операции']
-            if len(category.strip()) == 0:
-                category = op
             transactions.append(rec_t(tstamp, op, amount, currency, amount_byn, category, os.path.basename(filename), lineno))
 
     def read_blocked(lines, start):
@@ -55,8 +53,6 @@ def read_transactions(filename):
             currency = row[3]
             amount_byn = float(rowh['Сумма блокировки'].replace(',','.').replace(' ',''))
             category = rowh['Категория операции']
-            if len(category.strip()) == 0:
-                category = op
             transactions.append(rec_t(tstamp, op, -amount, currency, -amount_byn, category, os.path.basename(filename), lineno))
 
     with open(filename, 'r', encoding="windows-1251") as f:

@@ -6,6 +6,7 @@ from typing import List, DefaultDict, Dict, Union
 # from mypy_extensions import TypedDict
 from tabulate import tabulate
 import numpy as np
+import xlsxwriter
 
 uni_t = named_dict('uni_t', ['account', 'date', 'amount', 'currency', 'category', 'src'])
 
@@ -68,7 +69,7 @@ class Main:
                 if _type in ['rub', 'credit']:
                     cat = tr.category
                 else:
-                    cat = tr.op
+                    cat = tr.op + tr.category
                 _tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
                 cat = self.get_category(_tr)
                 tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
@@ -125,7 +126,7 @@ class Main:
             'to RUB' : [r'CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL'],
             'to BYN' : [r'CH Debit BLR MINSK P2P SDBO NO FEE'],
             'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
-            'Kate eats' : [r'STOLOVAYA VILKA'],
+            'Kate eats' : [r'STOLOVAYA VILKA', r'Ресторация'],
         }
 
         for cat, regs in cat_defs.items():
@@ -187,6 +188,45 @@ class Main:
 
         return tabulate(_sum, headers=headers)
 
+    def write_summary_to_excel(self, en_no_tr, by_cat):
+
+        expenses_by_day = self.expenses_by_day(en_no_tr)
+
+        # eval speed
+        headers = [''] + [d.day for d in sorted(expenses_by_day.keys())] + ['avg_7']
+        all_curs = {tr.currency for d, trs in expenses_by_day.items() for tr in trs}
+        def tr_format(tr):
+            return f"{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
+
+        def _make_row(_cur, collapse=True):
+            if collapse:
+                by_day_sums = [sum([tr.amount for tr in trs if tr.currency == _cur]) for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+                return [f'by day,{_cur}'] + by_day_sums + [np.mean(by_day_sums[-7:])]
+            else:
+                by_day_sums = [[tr_format(tr) for tr in trs if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+                return by_day_sums
+        
+        rows = [ _make_row(_cur) for _cur in all_curs] 
+        rowsc = [ _make_row(_cur, collapse=False) for _cur in all_curs] 
+
+        def addr(c,r):
+            return str(chr(ord('A')+c))+str(r+1)
+
+        workbook = xlsxwriter.Workbook('summary.xlsx')
+        worksheet = workbook.add_worksheet()
+
+        for i,h in enumerate(headers):            
+            worksheet.write(addr(i,0), h)
+        for r, row in enumerate(rows):
+            for c,v in enumerate(row):
+                worksheet.write(addr(c,r+1), v)
+        for r, row in enumerate(rowsc):
+            for c,trs in enumerate(row):
+                worksheet.write_comment(addr(c+1,r+1), str(trs))
+
+        # worksheet.write_comment('A1', 'This is a comment')
+        workbook.close()        
+
     def speed_by_day(self, en):
         ret = defaultdict(lambda: defaultdict(float))
         for tr in en:
@@ -226,23 +266,25 @@ class Main:
             json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
         en_no_tr = self.filter_transfers(en)
-        en_no_tr = list(en_no_tr)
+        en_no_tr = list(en_no_tr)        
 
-        expenses_by_day = self.expenses_by_day(en_no_tr)
-        expenses_by_day = [(str(d),trs) for d, trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+        # expenses_by_day = self.expenses_by_day(en_no_tr)
+        # expenses_by_day = [(str(d),trs) for d, trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
 
-        with open(self.args.bydayout, 'w') as f:
-            json.dump(expenses_by_day, f, indent=4, default=self.sterilize, ensure_ascii=False)
+        # with open(self.args.bydayout, 'w') as f:
+        #     json.dump(expenses_by_day, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
         spd = self.speed_by_day(en_no_tr)
         print(self.printable_speed(spd))
         print('\n')
 
-        en = self.group_by_category(en)
-        print(self.printable_summary(en))
+        by_cat = self.group_by_category(en)
+        print(self.printable_summary(by_cat))
 
-        with open(self.args.sumout, 'w') as f:
-            json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
+        self.write_summary_to_excel(en_no_tr, by_cat)
+
+        # with open(self.args.sumout, 'w') as f:
+        #     json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
 
     @staticmethod
     def main(args):
