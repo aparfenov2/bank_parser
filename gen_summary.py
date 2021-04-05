@@ -8,6 +8,7 @@ from tabulate import tabulate
 import numpy as np
 import xlsxwriter
 import itertools
+from mako.template import Template
 
 class _uni_t:
     def __init__(self):
@@ -40,8 +41,10 @@ class Main:
         parser.add_argument('--after',  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--allout', default="transactions.json")
-        parser.add_argument('--sumout', default="summary.json")
+        parser.add_argument('--sumout', default="summary.txt")
         parser.add_argument('--bydayout', default="expenses_by_day.json")
+        parser.add_argument('--xlsout', help="summary.xlsx")
+        parser.add_argument('--htmlout', default="summary.html")
 
         return parser
 
@@ -76,12 +79,12 @@ class Main:
         for _type, trs in en:
             #['date', 'amount', 'currency', 'category', 'src']
             for tr in trs:
-                if _type in ['rub', 'credit']:
-                    cat = tr.category
-                else:
-                    cat = tr.op + tr.category
-                _tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
-                cat = self.get_category(_tr)
+                # if _type in ['rub', 'credit']:
+                #     cat = tr.category
+                # else:
+                #     cat = tr.op + tr.category
+                # _tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
+                cat = self.get_category(tr)
                 tr = uni_t(_type, tr.date, tr.amount, tr.currency, cat, tr)
                 yield tr
 
@@ -176,6 +179,23 @@ class Main:
             'spent_total' : spent_total
             }
 
+    def tr_format_html(self, trs):
+        html = """
+        <table>
+            <tbody>
+            % for tr in data['trs']:
+                <tr>
+                    <td>${data['self'].tr_format(tr)}</td>
+                </tr>
+            % endfor
+            </tbody>
+        </table>
+        """
+        tm = Template(html)
+        return tm.render(data={'self':self, 'trs':trs})
+
+        # return f"{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
+
     def printable_summary(self, by_cat, printable=True):
         by_acc_cur = {
             cat : {
@@ -199,15 +219,9 @@ class Main:
         ]
         _sum += [['total'] + [total_by_acc.get(acc_cur, '') for acc_cur in acc_curs]]
 
-        return tabulate(_sum, headers=headers) if printable else (_sum, headers, acc_curs, by_acc_cur)
-
-    def write_summary_to_excel(self, worksheet, by_cat, printable, row_offset=0):
-
-        rows, headers, acc_curs, by_acc_cur = printable
-
         by_acc_cur_c = {
             cat : {
-                f"{acc}_{cur}" : [self.tr_format(tr) for tr in v.trs] \
+                f"{acc}_{cur}" : self.tr_format_html(sorted(v.trs, key=lambda tr: tr.amount)) \
                     for acc, curd in accd.items() for cur, v in curd.items()
             } for cat, accd in by_cat['summary'].items()
         }
@@ -220,14 +234,20 @@ class Main:
                 for cat, accurd in sorted([(k,v) for k,v in by_acc_cur_c.items() if k != 'income'], key=lambda kv: kv[0])
         ]
 
+        return tabulate(_sum, headers=headers) if printable else (_sum, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com)
+
+    def write_summary_to_excel(self, worksheet, by_cat, printable, row_offset=0):
+
+        rows, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com = printable
+
         for i,h in enumerate(headers):            
-            worksheet.write(self.xlsaddr(i,row_offset+0), h)
+            worksheet.write(*self.xlsaddr(i,row_offset+0), h)
 
         for r, (row, row_c) in enumerate(itertools.zip_longest(rows, _com)):
             for c,(v, com) in enumerate(itertools.zip_longest(row, row_c if row_c is not None else [])):
-                worksheet.write(self.xlsaddr(c,row_offset+r+1), v)
+                worksheet.write(*self.xlsaddr(c,row_offset+r+1), v)
                 if com is not None:
-                    worksheet.write_comment(self.xlsaddr(c,row_offset+r+1), str(com))
+                    worksheet.write_comment(*self.xlsaddr(c,row_offset+r+1), str(com))
 
 
     def expenses_by_day(self, en):
@@ -250,7 +270,8 @@ class Main:
         return tabulate(rows, headers=headers) if printable else (rows, headers, all_curs)
 
     def xlsaddr(self,c,r):
-        return str(chr(ord('A')+c))+str(r+1)
+        # return str(chr(ord('A')+c))+str(r+1)
+        return r,c
 
     def tr_format(self, tr):
         return f"{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
@@ -258,21 +279,106 @@ class Main:
     def write_spd_to_excel(self, worksheet, expenses_by_day, printable):
 
         rows, headers, all_curs = printable
-
         def _make_row(_cur):
-            return [[self.tr_format(tr) for tr in trs if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+            return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
+                if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
 
         rowsc = [ _make_row(_cur) for _cur in all_curs] 
 
-        for i,h in enumerate(headers):            
-            worksheet.write(self.xlsaddr(i,0), h)
+        for i,h in enumerate(headers):
+            # print(i,self.xlsaddr(i,0),h)
+            worksheet.write(*self.xlsaddr(i,0), h)
         for r, row in enumerate(rows):
             for c,v in enumerate(row):
-                worksheet.write(self.xlsaddr(c,r+1), v)
+                worksheet.write(*self.xlsaddr(c,r+1), v)
         for r, row in enumerate(rowsc):
             for c,trs in enumerate(row):
-                worksheet.write_comment(self.xlsaddr(c+1,r+1), str(trs))
+                worksheet.write_comment(*self.xlsaddr(c+1,r+1), str(trs))
         return len(rows)
+
+    def do_htmlout(self, expenses_by_day_printable, by_cat_printable):
+        rows, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com = by_cat_printable
+        data = {
+            'rows':rows, 
+            'headers':headers, 
+            'acc_curs':acc_curs, 
+            'by_acc_cur':by_acc_cur, 
+            'by_acc_cur_c':by_acc_cur_c, 
+            '_com':_com
+            }
+
+        # for i,h in enumerate(headers):            
+        #     worksheet.write(*self.xlsaddr(i,row_offset+0), h)
+
+        # for r, (row, row_c) in enumerate(itertools.zip_longest(rows, _com)):
+        #     for c,(v, com) in enumerate(itertools.zip_longest(row, row_c if row_c is not None else [])):
+        #         worksheet.write(*self.xlsaddr(c,row_offset+r+1), v)
+        #         if com is not None:
+        #             worksheet.write_comment(*self.xlsaddr(c,row_offset+r+1), str(com))
+
+        html = """
+<%! import itertools %>        
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>summary</title>
+    <style>
+
+.cart { width: 100%; }
+
+.hasTooltip span {
+    display: none;
+    color: #000;
+    text-decoration: none;
+    padding: 3px;
+}
+
+.hasTooltip:hover span {
+    display: block;
+    position: absolute;
+    background-color: #FFF;
+    border: 1px solid #CCC;
+    margin: 2px 10px;
+}    
+ 
+   </style>
+</head>
+
+<body>
+    <center>Summary</center>
+
+     <table class="cart">
+        <thead>
+            <tr>
+            % for h in data['headers']:
+                <td>${h}</td>
+            % endfor
+            </tr>
+        </thead>
+
+        <tbody>
+            % for row, row_c in itertools.zip_longest(data['rows'], data['_com']):
+            <tr>
+                % for v, com in itertools.zip_longest(row, row_c if row_c is not None else []):
+                <td class="hasTooltip">${v}
+                    % if com is not None:
+                    <span class="tooltip">${com}</span>
+                    % endif
+                </td>
+                % endfor
+            </tr>
+            % endfor
+        </tbody>
+    </table>
+</body>
+
+</html>        
+        """
+
+        tm = Template(html)
+
+        with open(self.args.htmlout, 'w') as out:
+            out.write(tm.render(data=data))
 
 
     def sterilize(self, obj):
@@ -305,22 +411,40 @@ class Main:
         by_cat = self.group_by_category(en)
         print(self.printable_summary(by_cat))
 
-        workbook = xlsxwriter.Workbook('summary.xlsx')
-        worksheet = workbook.add_worksheet()
+        if self.args.xlsout is not None:
+            workbook = xlsxwriter.Workbook(self.args.xlsout)
+            worksheet = workbook.add_worksheet()
 
-        row_offset = self.write_spd_to_excel(worksheet, expenses_by_day, 
-            self.printable_speed(expenses_by_day, printable=False))
-        
-        self.write_summary_to_excel(worksheet, by_cat, 
-            self.printable_summary(by_cat, printable=False), row_offset=row_offset + 2)
-        workbook.close()        
+            row_offset = self.write_spd_to_excel(worksheet, expenses_by_day, 
+                self.printable_speed(expenses_by_day, printable=False))
+            
+            self.write_summary_to_excel(worksheet, by_cat, 
+                self.printable_summary(by_cat, printable=False), row_offset=row_offset + 2)
+            workbook.close()        
 
-        # with open(self.args.sumout, 'w') as f:
-        #     json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
+        if self.args.htmlout is not None:
+            self.do_htmlout(
+                self.printable_speed(expenses_by_day, printable=False), 
+                self.printable_summary(by_cat, printable=False)
+                )
+
+        printable_sum = self.printable_summary(by_cat, printable=True)
+        with open(self.args.sumout, 'w') as f:
+            # json.dump(printable_sum, f, indent=4, default=self.sterilize, ensure_ascii=False)
+            f.write(printable_sum)
 
     @staticmethod
     def main(args):
-        logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
+        # logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
+        root = logging.getLogger()
+        root.setLevel(logging.INFO if not args.debug else logging.DEBUG)
+
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.INFO if not args.debug else logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        root.addHandler(handler)        
+
         Main(args).go()
 
 if __name__ == "__main__":
