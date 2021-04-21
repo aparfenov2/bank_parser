@@ -9,6 +9,7 @@ import numpy as np
 import xlsxwriter
 import itertools
 from mako.template import Template
+import sqlite3
 
 class _uni_t:
     def __init__(self):
@@ -34,12 +35,14 @@ class Main:
     @staticmethod
     def make_parser():
         parser = argparse.ArgumentParser()
-        parser.add_argument('csvdir')
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument('--csvdir')
+        group.add_argument('--db')
         parser.add_argument('--debug', action='store_true')
         parser.add_argument('--days_after', type=int)
         parser.add_argument('--days_before', type=int)
-        parser.add_argument('--after',  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
-        parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
+        parser.add_argument('--after', required=True,  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
+        parser.add_argument('--before', required=True, type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         parser.add_argument('--allout', default="transactions.json")
         parser.add_argument('--sumout', default="summary.txt")
         parser.add_argument('--bydayout', default="expenses_by_day.json")
@@ -74,6 +77,40 @@ class Main:
                 except Exception:
                     self.logger.exception(fullpath)
                     raise
+
+    def read_database(self):
+        def regexp(expr, item):
+            reg = re.compile(expr)
+            return reg.search(item) is not None
+
+        with sqlite3.connect(self.args.db) as conn:
+            conn.set_trace_callback(self.logger.info)
+            conn.create_function("REGEXP", 2, regexp)
+            cursor = conn.cursor()
+            vc = {
+                'after' : self.args.after,
+                'before' : self.args.before
+            }
+            cursor.execute("SELECT account, adate, amount, currency, cat, descr FROM trsv WHERE adate between :after and :before", vc)
+            items = cursor.fetchall()
+            for it in items:
+                src = uni_t(
+                    it[0], # account
+                    datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                    it[2], # amount
+                    it[3], # currency
+                    it[5], # descr as cat 
+                    None
+                    )
+                yield uni_t(
+                    it[0], # account
+                    datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                    it[2], # amount
+                    it[3], # currency
+                    it[4], # cat
+                    src
+                    )
+
 
     def to_unified_rec(self, en):
         for _type, trs in en:
@@ -387,11 +424,15 @@ class Main:
         assert False, str(type(obj))
 
     def go(self):
-        en = self.read_datadir()
-        en = self.to_unified_rec(en)
-        en = self.filter_by_date(en)
-        en = list(en)
-        en = sorted(en, key=lambda tr: tr.date)
+        if self.args.db is None:
+            en = self.read_datadir()
+            en = self.to_unified_rec(en)
+            en = self.filter_by_date(en)
+            en = list(en)
+            en = sorted(en, key=lambda tr: tr.date)
+        else:
+            en = self.read_database()
+            en = list(en)
 
         with open(self.args.allout, 'w') as f:
             json.dump(en, f, indent=4, default=self.sterilize, ensure_ascii=False)
