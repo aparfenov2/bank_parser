@@ -1,4 +1,4 @@
-import argparse, os, datetime
+import argparse, os, datetime, re
 import logging
 from gen_summary import Main as _Main
 from enum import Enum
@@ -59,8 +59,8 @@ create table trs (
             'account' : account,
             'currency': c.currency,
             'adate'   : c.date.strftime('%Y-%m-%d %H:%M:%S'),
-            'amount'  : c.amount,
-            'descr'   : c.category,
+            'amount'  : "{:.2f}".format(c.amount),
+            'descr'   : re.sub(r"[^0-9a-zA-Zа-яёА-ЯЁ]",'',c.category).upper(),
             }
         return Main.dict_hash(vc)
 

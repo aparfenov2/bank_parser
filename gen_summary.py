@@ -311,7 +311,7 @@ class Main:
         return r,c
 
     def tr_format(self, tr):
-        return f"{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
+        return f"{tr.date}-{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
 
     def write_spd_to_excel(self, worksheet, expenses_by_day, printable):
 
