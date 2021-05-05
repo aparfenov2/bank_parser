@@ -248,7 +248,7 @@ class Main:
         acc_curs = ['usd_USD','usd_BYN', 'byn_BYN','usd_RUB','byn_RUB','rub_RUB','credit_RUB', 'total']
         headers = ['cat'] + acc_curs
         _sum = [
-            ['income'] + [by_acc_cur['income'].get(acc_cur, '') for acc_cur in acc_curs]
+            ['income'] + [by_acc_cur.get('income',{}).get(acc_cur, '') for acc_cur in acc_curs]
         ]
         _sum += [
             [cat] + [accurd.get(acc_cur, '') for acc_cur in acc_curs] \
@@ -264,7 +264,7 @@ class Main:
         }
 
         _com = [
-            ['income'] + [by_acc_cur_c['income'].get(acc_cur, None) for acc_cur in acc_curs]
+            ['income'] + [by_acc_cur_c.get('income',{}).get(acc_cur, None) for acc_cur in acc_curs]
         ]
         _com += [
             [None] + [accurd.get(acc_cur, None) for acc_cur in acc_curs] \
@@ -304,23 +304,29 @@ class Main:
         
         rows = [ _make_row(_cur) for _cur in all_curs] 
 
-        return tabulate(rows, headers=headers) if printable else (rows, headers, all_curs)
+        def _make_row_c(_cur):
+            return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
+                if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+
+        rows_c = [ _make_row_c(_cur) for _cur in all_curs] 
+
+        return tabulate(rows, headers=headers) if printable else (rows, headers, all_curs, rows_c)
 
     def xlsaddr(self,c,r):
         # return str(chr(ord('A')+c))+str(r+1)
         return r,c
 
     def tr_format(self, tr):
-        return f"{tr.date}-{tr.account}-{tr.category} {tr.amount:6.2f} {tr.src.category}"
+        return f"{tr.date}-{tr.account}-{tr.category} {tr.amount:6.2f} {tr.currency} {tr.src.category}"
 
     def write_spd_to_excel(self, worksheet, expenses_by_day, printable):
 
-        rows, headers, all_curs = printable
-        def _make_row(_cur):
-            return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
-                if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+        rows, headers, all_curs, rowsc = printable
+        # def _make_row(_cur):
+        #     return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
+        #         if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
 
-        rowsc = [ _make_row(_cur) for _cur in all_curs] 
+        # rowsc = [ _make_row(_cur) for _cur in all_curs] 
 
         for i,h in enumerate(headers):
             # print(i,self.xlsaddr(i,0),h)
@@ -413,9 +419,7 @@ class Main:
         """
 
         tm = Template(html)
-
-        with open(self.args.htmlout, 'w') as out:
-            out.write(tm.render(data=data))
+        return tm.render(data=data)
 
 
     def sterilize(self, obj):
@@ -464,10 +468,12 @@ class Main:
             workbook.close()        
 
         if self.args.htmlout is not None:
-            self.do_htmlout(
+            html = self.do_htmlout(
                 self.printable_speed(expenses_by_day, printable=False), 
                 self.printable_summary(by_cat, printable=False)
                 )
+            with open(self.args.htmlout, 'w') as out:
+                out.write(html)
 
         printable_sum = self.printable_summary(by_cat, printable=True)
         with open(self.args.sumout, 'w') as f:
