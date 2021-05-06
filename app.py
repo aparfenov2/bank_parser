@@ -1,16 +1,20 @@
-from flask import Flask, request
+import flask
 from gen_summary import Main
+from update_database import Main as UpdateMain
 import datetime
 import unittest
 from mako.template import Template
 import numpy as np
+import os
 
-app = Flask(__name__)
+app = flask.Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'upload'
 
 class _args: pass
 
 WAGE_DAY=5
 DATETIME_FORMAT='%d.%m.%Y'
+DATABASE_PATH='db/db.mysql3'
 
 def get_closest_wage_dates(now):
     if now.day < WAGE_DAY:
@@ -86,8 +90,8 @@ def expenses_calendar(self, expenses_by_day):
 
 @app.route('/')
 def index():
-    req_args_after = request.args.get('after')
-    req_args_before = request.args.get('before')
+    req_args_after = flask.request.args.get('after')
+    req_args_before = flask.request.args.get('before')
     args = _args()
     if req_args_after is None:
         args.after, args.before = get_closest_wage_dates(datetime.datetime.now())
@@ -95,7 +99,7 @@ def index():
         args.after = datetime.datetime.strptime(req_args_after, DATETIME_FORMAT)
         args.before = datetime.datetime.strptime(req_args_before, DATETIME_FORMAT)
 
-    args.db = "db/db.mysql3"
+    args.db = DATABASE_PATH
 
     self = Main(args)
     en = self.read_database()
@@ -137,6 +141,41 @@ def index():
     #     )
     tm = Template(filename="templates/summary.html")
     return tm.render(data=data)
+
+
+def delete_all(folder):
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            os.unlink(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+@app.route('/upload', methods=['GET','POST'])
+def upload():
+    if flask.request.method == "POST":
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+        files = flask.request.files.getlist("file[]")
+        if len(files) > 0:
+            delete_all(app.config['UPLOAD_FOLDER'])
+            for file in files:
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+
+            args = _args()
+            args.csvdir = app.config['UPLOAD_FOLDER']
+            args.database = DATABASE_PATH
+            UpdateMain(args).main()
+
+        # return flask.redirect("/upload")
+        return f"imported {[f.filename for f in files]}"
+    else:
+        return """
+<form method="POST" enctype="multipart/form-data" action="/upload">
+  <input type="file" name="file[]" multiple="">
+  <input type="submit" value="Import">
+</form>
+    """
 
 if __name__ == '__main__':
     app.run(debug=True)

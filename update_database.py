@@ -58,7 +58,7 @@ create table trs (
         vc = {
             'account' : account,
             'currency': c.currency,
-            'adate'   : c.date.strftime('%Y-%m-%d %H:%M:%S'),
+            'adate'   : c.date.strftime('%Y-%m-%d'),
             'amount'  : "{:.2f}".format(c.amount),
             'descr'   : re.sub(r"[^0-9a-zA-Zа-яёА-ЯЁ]",'',c.category).upper(),
             }
