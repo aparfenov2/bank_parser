@@ -3,6 +3,7 @@ from gen_summary import Main
 import datetime
 import unittest
 from mako.template import Template
+import numpy as np
 
 app = Flask(__name__)
 
@@ -17,14 +18,14 @@ def get_closest_wage_dates(now):
             left = now.replace(day = WAGE_DAY, month = now.month - 1)
         else:
             left = now.replace(day = WAGE_DAY, month = 12, year = now.year - 1)
-        right = now.replace(day = WAGE_DAY)
+        right = now.replace(day = WAGE_DAY - 1)
         return left, right
     else:
         left = now.replace(day = WAGE_DAY)
         if now.month < 12:
-            right = now.replace(day = WAGE_DAY, month = now.month + 1)
+            right = now.replace(day = WAGE_DAY - 1, month = now.month + 1)
         else:
-            right = now.replace(day = WAGE_DAY, month = 1, year = now.year + 1)
+            right = now.replace(day = WAGE_DAY - 1, month = 1, year = now.year + 1)
 
     return left, right
 
@@ -33,19 +34,55 @@ class UT1(unittest.TestCase):
         now = datetime.datetime.strptime('01.03.2021', DATETIME_FORMAT)
         a,b = get_closest_wage_dates(now)
         self.assertEqual(datetime.datetime.strptime('05.02.2021', DATETIME_FORMAT), a)
-        self.assertEqual(datetime.datetime.strptime('05.03.2021', DATETIME_FORMAT), b)
+        self.assertEqual(datetime.datetime.strptime('04.03.2021', DATETIME_FORMAT), b)
 
     def test2(self):
         now = datetime.datetime.strptime('15.03.2021', DATETIME_FORMAT)
         a,b = get_closest_wage_dates(now)
         self.assertEqual(datetime.datetime.strptime('05.03.2021', DATETIME_FORMAT), a)
-        self.assertEqual(datetime.datetime.strptime('05.04.2021', DATETIME_FORMAT), b)
+        self.assertEqual(datetime.datetime.strptime('04.04.2021', DATETIME_FORMAT), b)
 
     def test2(self):
         now = datetime.datetime.strptime('05.03.2021', DATETIME_FORMAT)
         a,b = get_closest_wage_dates(now)
         self.assertEqual(datetime.datetime.strptime('05.03.2021', DATETIME_FORMAT), a)
-        self.assertEqual(datetime.datetime.strptime('05.04.2021', DATETIME_FORMAT), b)
+        self.assertEqual(datetime.datetime.strptime('04.04.2021', DATETIME_FORMAT), b)
+
+
+def expenses_calendar(self, expenses_by_day):
+    all_curs = {tr.currency for d, trs in expenses_by_day.items() for tr in trs}
+
+    def make_sum(trs):
+        _sum = {cur : sum([tr.amount for tr in trs if tr.currency == cur]) for cur in all_curs}
+        return ','.join([f"{s:6.2f} {c}" for c,s in _sum.items() if abs(s) > 0])
+
+    spd_rows = [] # [(d,v,c)]
+    cwod = 0
+    crow = []
+    for d,trs in sorted(expenses_by_day.items(),  key=lambda kv: kv[0]):
+        while cwod < d.weekday():
+            crow += [(None,None,None)]
+            cwod += 1
+        crow += [(d.day, make_sum(trs), self.tr_format_html(list(sorted(trs, key=lambda kv: kv.amount))) )]
+        if cwod >= 6:
+            spd_rows += [crow]
+            crow = []
+            cwod = 0
+        else:
+            cwod += 1
+    if len(crow) > 0:
+        while cwod <= 6:
+            crow += [(None,None,None)]
+            cwod += 1
+        spd_rows += [crow]
+
+    def _make_row(_cur):
+        by_day_sums = [sum([tr.amount for tr in trs if tr.currency == _cur]) for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+        return [f'by day,{_cur}'] + by_day_sums + [np.mean(by_day_sums[-7:])]
+    
+    rows = [ _make_row(_cur) for _cur in all_curs] 
+
+    return spd_rows, ', '.join([f"{r[-1]:6.2f} {c}/day" for c,r in zip(all_curs,rows)])
 
 @app.route('/')
 def index():
@@ -70,35 +107,12 @@ def index():
     en_no_tr = list(en_no_tr)
     expenses_by_day = self.expenses_by_day(en_no_tr)
     # spd_rows, spd_headers, spd_all_curs, spd_rows_c = self.pintable_speed(expenses_by_day, printable=False)
-    all_curs = {tr.currency for d, trs in expenses_by_day.items() for tr in trs}
-
-    def make_sum(trs):
-        _sum = {cur : sum([tr.amount for tr in trs if tr.currency == cur]) for cur in all_curs}
-        return ','.join([f"{s:6.2f} {c}" for c,s in _sum.items() if abs(s) > 0])
-
-    spd_rows = [] # [(d,v,c)]
-    cwod = 0
-    crow = []
-    for d,trs in sorted(expenses_by_day.items(),  key=lambda kv: kv[0]):
-        while cwod < d.weekday():
-            crow += [(None,None,None)]
-            cwod += 1
-        crow += [(d.day, make_sum(trs), self.tr_format_html(list(sorted(trs, key=lambda kv: kv.amount))) )]
-        if cwod >= 6:
-            spd_rows += [crow]
-            crow = []
-            cwod = 0
-        else:
-            cwod += 1
-    while cwod < 6:
-        crow += [(None,None,None)]
-        cwod += 1
-    spd_rows += [crow]
+    spd_rows, avg_7 = expenses_calendar(self, expenses_by_day)
 
     rows, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com = self.printable_summary(by_cat, printable=False)
 
     prev_after, prev_before = get_closest_wage_dates(args.after - datetime.timedelta(days=1))
-    next_after, next_before = get_closest_wage_dates(args.before)
+    next_after, next_before = get_closest_wage_dates(args.before + datetime.timedelta(days=1))
 
     data = {        
         'rows':rows, 
@@ -113,7 +127,8 @@ def index():
         'prev_before' : prev_before.strftime(DATETIME_FORMAT),
         'next_after' : next_after.strftime(DATETIME_FORMAT),
         'next_before': next_before.strftime(DATETIME_FORMAT),
-        'spd_rows' : spd_rows
+        'spd_rows' : spd_rows,
+        '7_avg' : avg_7
         }
 
     # html = self.do_htmlout(
