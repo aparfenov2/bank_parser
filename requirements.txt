@@ -1,0 +1,5 @@
+numpy
+Mako
+tabulate
+Flask
+XlsxWriter
