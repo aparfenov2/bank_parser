@@ -54,7 +54,7 @@ create table trs (
         return dhash.hexdigest()    
 
     @staticmethod
-    def get_hash(account, c):
+    def get_hash(account, c, salt=0):
         vc = {
             'account' : account,
             'currency': c.currency,
@@ -62,6 +62,8 @@ create table trs (
             'amount'  : "{:.2f}".format(c.amount),
             'descr'   : re.sub(r"[^0-9a-zA-Zа-яёА-ЯЁ]",'',c.category).upper(),
             }
+        if salt > 0:
+            vc['salt'] = salt
         return Main.dict_hash(vc)
 
     def update_database(self, en):
@@ -73,14 +75,24 @@ create table trs (
                 conn.executescript(self.DB_SCHEMA)
                 conn.commit()
             cursor = conn.cursor()
+            used_hashes = set()
+
             for account, c in en:
                 try:
-                    vc = {'ahash' : self.get_hash(account, c)}
+                    salt = 0
+                    ahash = self.get_hash(account, c, salt)
+                    while ahash in used_hashes:
+                        salt += 1
+                        new_hash = self.get_hash(account, c, salt)
+                        self.logger.warning(f"repeated hash {ahash} for account {account} c {c} new hash {new_hash} salt {salt}")
+                        ahash = new_hash
+                    used_hashes.add(ahash)
+
+                    vc = {'ahash' : ahash}
                     cursor.execute("SELECT * FROM trs WHERE ahash = :ahash", vc)
                     item = cursor.fetchone()
                     if item is not None:
-                        print(item)
-                        self.logger.info(f"matched hash {self.get_hash(account,c)} to id {item[0]} account={account}, c={c}, item={item}")
+                        self.logger.info(f"matched hash {ahash} to id {item[0]} account={account}, c={c}, item={item}")
                     else:
                         vc = {
                             'account' : account,
@@ -88,7 +100,7 @@ create table trs (
                             'adate'   : c.date.strftime('%Y-%m-%d %H:%M:%S'),
                             'amount'  : c.amount,
                             'descr'   : c.category,
-                            'ahash'   : self.get_hash(account, c)
+                            'ahash'   : ahash
                             }
                         not_none = list(vc.keys())
                         cursor.execute("INSERT INTO trs ({}) VALUES ({})" \
