@@ -10,6 +10,7 @@ import xlsxwriter
 import itertools
 from mako.template import Template
 import sqlite3
+import psycopg2
 
 class _uni_t:
     def __init__(self):
@@ -83,9 +84,14 @@ class Main:
             reg = re.compile(expr)
             return reg.search(item) is not None
 
-        with sqlite3.connect(self.args.db) as conn:
+        # with sqlite3.connect(self.args.db) as conn:
+        with psycopg2.connect(
+            host=self.args.db_host,
+            database=self.args.db_database,
+            user=self.args.db_usr,
+            password=self.args.db_pwd) as conn:
             conn.set_trace_callback(self.logger.info)
-            conn.create_function("REGEXP", 2, regexp)
+            # conn.create_function("REGEXP", 2, regexp)
             cursor = conn.cursor()
             vc = {
                 'after' : self.args.after,

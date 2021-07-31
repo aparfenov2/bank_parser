@@ -68,7 +68,14 @@ create table trs (
 
     def update_database(self, en):
         db_is_new = not os.path.exists(self.args.database)
-        with sqlite3.connect(self.args.database) as conn:
+        # with sqlite3.connect(self.args.database) as conn:
+
+        with psycopg2.connect(
+            host=self.args.db_host,
+            database=self.args.db_database,
+            user=self.args.db_usr,
+            password=self.args.db_pwd) as conn:
+
             conn.set_trace_callback(self.logger.info)
             if db_is_new:
                 self.logger.info(f'Creating database schema for db {self.args.database}')

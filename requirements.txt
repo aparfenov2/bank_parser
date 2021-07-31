@@ -3,3 +3,4 @@ Mako
 tabulate
 Flask
 XlsxWriter
+psycopg2
