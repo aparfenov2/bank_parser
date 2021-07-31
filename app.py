@@ -6,6 +6,9 @@ import unittest
 from mako.template import Template
 import numpy as np
 import os
+import logging
+import logging.handlers
+import StringIO
 
 app = flask.Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'upload'
@@ -165,10 +168,23 @@ def upload():
             args = _args()
             args.csvdir = app.config['UPLOAD_FOLDER']
             args.database = DATABASE_PATH
-            UpdateMain(args).main()
+            um = UpdateMain(args)
+
+            s = StringIO.StringIO()
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            streamhandler = logging.StreamHandler(s)
+            streamhandler.setFormatter(formatter)
+            memoryhandler = logging.handlers.MemoryHandler(1024*10, logging.DEBUG, streamhandler)
+            um.logger.addHandler(memoryhandler)    
+
+            um.main()
+
+            um.logger.removeHandler(memoryhandler)
+            memoryhandler.flush()
+            memoryhandler.close()
 
         # return flask.redirect("/upload")
-        return f"imported {[f.filename for f in files]}"
+        return f"imported {[f.filename for f in files]} {s.getvalue()}"
     else:
         return """
 <form method="POST" enctype="multipart/form-data" action="/upload">
