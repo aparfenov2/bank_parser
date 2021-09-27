@@ -1,7 +1,7 @@
 numpy
 Mako
 tabulate
-Flask
+flask
 XlsxWriter
 psycopg2
 sqlalchemy

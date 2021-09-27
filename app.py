@@ -8,7 +8,7 @@ import numpy as np
 import os
 import logging
 import logging.handlers
-import StringIO
+from io import StringIO
 
 app = flask.Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'upload'
@@ -17,7 +17,7 @@ class _args: pass
 
 WAGE_DAY=5
 DATETIME_FORMAT='%d.%m.%Y'
-DATABASE_PATH='db/db.mysql3'
+DATABASE_PATH='postgresql://usr:123@localhost'
 
 def get_closest_wage_dates(now):
     if now.day < WAGE_DAY:
