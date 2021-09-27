@@ -1,10 +1,11 @@
 import argparse, os, datetime, re
 import logging
-from gen_summary import Main as _Main
+from gen_summary import Main as _Main, trs_t, db_base_t
 from enum import Enum
 from typing import Dict, Any
 import hashlib
-import json, sqlite3
+import json
+import sqlalchemy as sq
 
 class Account(Enum):
     USD_prior = 'usd'
@@ -31,18 +32,6 @@ class Main(_Main):
         # parser.add_argument('--before', type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
         return parser
 
-    DB_SCHEMA = """
-create table trs (
-    id           integer primary key autoincrement not null,
-    account      text not null,
-    currency     text not null,
-    adate        datetime not null,
-    amount       float not null,
-    descr        text not null,
-    ahash        text not null
-);
-    """
-
     @staticmethod
     def dict_hash(dictionary: Dict[str, Any]) -> str:
         """MD5 hash of a dictionary."""
@@ -67,21 +56,14 @@ create table trs (
         return Main.dict_hash(vc)
 
     def update_database(self, en):
-        db_is_new = not os.path.exists(self.args.database)
+        # db_is_new = not os.path.exists(self.args.database)
         # with sqlite3.connect(self.args.database) as conn:
 
-        with psycopg2.connect(
-            host=self.args.db_host,
-            database=self.args.db_database,
-            user=self.args.db_usr,
-            password=self.args.db_pwd) as conn:
+        db = sq.create_engine(self.args.database)
+        Session = sq.orm.sessionmaker(db)
+        db_base_t.metadata.create_all(db)
 
-            conn.set_trace_callback(self.logger.info)
-            if db_is_new:
-                self.logger.info(f'Creating database schema for db {self.args.database}')
-                conn.executescript(self.DB_SCHEMA)
-                conn.commit()
-            cursor = conn.cursor()
+        with Session() as session:
             used_hashes = set()
 
             for account, c in en:
@@ -95,24 +77,34 @@ create table trs (
                         ahash = new_hash
                     used_hashes.add(ahash)
 
-                    vc = {'ahash' : ahash}
-                    cursor.execute("SELECT * FROM trs WHERE ahash = :ahash", vc)
-                    item = cursor.fetchone()
+                    item = session.query(trs_t).where(trs_t.ahash == ahash).first()
+                    # vc = {'ahash' : ahash}
+                    # cursor.execute("SELECT * FROM trs WHERE ahash = :ahash", vc)
+                    # item = cursor.fetchone()
                     if item is not None:
-                        self.logger.info(f"matched hash {ahash} to id {item[0]} account={account}, c={c}, item={item}")
+                        self.logger.info(f"matched hash {ahash} to id {item.id} account={account}, c={c}, item={item}")
                     else:
-                        vc = {
-                            'account' : account,
-                            'currency': c.currency,
-                            'adate'   : c.date.strftime('%Y-%m-%d %H:%M:%S'),
-                            'amount'  : c.amount,
-                            'descr'   : c.category,
-                            'ahash'   : ahash
-                            }
-                        not_none = list(vc.keys())
-                        cursor.execute("INSERT INTO trs ({}) VALUES ({})" \
-                            .format(", ".join(not_none), ", ".join([":"+f for f in not_none])), vc)
-                    conn.commit()
+                        item = trs_t()
+                        item.account = account
+                        item.currency = c.currency
+                        item.adate = c.date
+                        item.amount = c.amount
+                        item.descr = c.category
+                        item.ahash = ahash
+                        # vc = {
+                        #     'account' : account,
+                        #     'currency': c.currency,
+                        #     'adate'   : c.date.strftime('%Y-%m-%d %H:%M:%S'),
+                        #     'amount'  : c.amount,
+                        #     'descr'   : c.category,
+                        #     'ahash'   : ahash
+                        #     }
+                    #     not_none = list(vc.keys())
+                    #     cursor.execute("INSERT INTO trs ({}) VALUES ({})" \
+                    #         .format(", ".join(not_none), ", ".join([":"+f for f in not_none])), vc)
+                    # conn.commit()
+                        session.add(item)
+                        session.commit()
                 except Exception:
                     self.logger.exception("")
                 yield c

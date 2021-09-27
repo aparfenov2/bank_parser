@@ -9,8 +9,20 @@ import numpy as np
 import xlsxwriter
 import itertools
 from mako.template import Template
-import sqlite3
-import psycopg2
+import sqlalchemy as sq
+from sqlalchemy.orm import declarative_base
+
+db_base_t = declarative_base()
+
+class trs_t(db_base_t):
+    __tablename__ = 'trs'
+    id = sq.Column(sq.Integer, primary_key=True, autoincrement=True)
+    account = sq.Column(sq.String,  nullable=False)
+    currency = sq.Column(sq.String,  nullable=False)
+    adate = sq.Column(sq.DateTime, nullable=False)
+    amount = sq.Column(sq.Float, nullable=False)
+    descr = sq.Column(sq.UnicodeText, nullable=False)
+    ahash = sq.Column(sq.String,  nullable=False)
 
 class _uni_t:
     def __init__(self):
@@ -80,42 +92,44 @@ class Main:
                     raise
 
     def read_database(self):
-        def regexp(expr, item):
-            reg = re.compile(expr)
-            return reg.search(item) is not None
+        # def regexp(expr, item):
+        #     reg = re.compile(expr)
+        #     return reg.search(item) is not None
+
+        db = sq.create_engine(self.args.db)
+        Session = sq.orm.sessionmaker(db)
 
         # with sqlite3.connect(self.args.db) as conn:
-        with psycopg2.connect(
-            host=self.args.db_host,
-            database=self.args.db_database,
-            user=self.args.db_usr,
-            password=self.args.db_pwd) as conn:
-            conn.set_trace_callback(self.logger.info)
-            # conn.create_function("REGEXP", 2, regexp)
-            cursor = conn.cursor()
-            vc = {
-                'after' : self.args.after,
-                'before' : self.args.before
-            }
-            cursor.execute("SELECT account, adate, amount, currency, cat, descr FROM trsv WHERE adate between :after and :before", vc)
-            items = cursor.fetchall()
+        with Session() as session:
+            items = session.query(trs_t).filter(trs_t.adate.between(self.args.after, self.args.before))
+            # vc = {
+            #     'after' : self.args.after,
+            #     'before' : self.args.before
+            # }
+            # cursor.execute("SELECT account, adate, amount, currency, cat, descr FROM trsv WHERE adate between :after and :before", vc)
+            # items = cursor.fetchall()
             for it in items:
-                src = uni_t(
-                    it[0], # account
-                    datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
-                    it[2], # amount
-                    it[3], # currency
-                    it[5], # descr as cat 
+                tr = uni_t(
+                    it.account, # account
+                    it.adate,
+                    # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                    it.amount, # amount
+                    it.currency, # currency
+                    it.descr, # descr as cat 
                     None
                     )
-                yield uni_t(
-                    it[0], # account
-                    datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
-                    it[2], # amount
-                    it[3], # currency
-                    it[4], # cat
-                    src
-                    )
+                cat = self.get_category(tr)
+                yield uni_t(tr.account, tr.date, tr.amount, tr.currency, cat, tr)
+
+                # yield uni_t(
+                #     it.account, # account
+                #     # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                #     it.adate,
+                #     it.amount, # amount
+                #     it.currency, # currency
+                #     it.descr, # cat
+                #     src
+                #     )
 
 
     def to_unified_rec(self, en):

@@ -4,3 +4,4 @@ tabulate
 Flask
 XlsxWriter
 psycopg2
+sqlalchemy
