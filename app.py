@@ -201,6 +201,6 @@ def upload():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', default=DEFAULT_DB_PATH)
-    g_args = parser.parse_args()
+    g_args,_ = parser.parse_known_args()
     logging.basicConfig(level=logging.INFO)
     app.run(host="0.0.0.0")
