@@ -1,6 +1,7 @@
 import argparse, os, datetime, re
 import logging
-from gen_summary import Main as _Main, trs_t, db_base_t
+from gen_summary import Main as _Main
+from table_defs import trs_t, db_base_t
 from enum import Enum
 from typing import Dict, Any
 import hashlib
