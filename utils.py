@@ -59,7 +59,11 @@ def read_transactions(filename):
         lines = f.readlines()
 
     start = lookup_header(lines, r'Дата транзакции;Операция;Сумма;')
+    if start is None:
+        raise Exception(f"cant find header in bad csv {filename}")
     end = lookup_header(lines[start:], r'Всего по контракту;Зачислено;Списано;')
+    if end is None:
+        raise Exception(f"cant find footer in bad csv {filename}")
     end += start
     read_op_sum(lines[start:end], start)
 

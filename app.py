@@ -9,6 +9,7 @@ import os
 import logging
 import logging.handlers
 from io import StringIO
+import argparse
 
 app = flask.Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'upload'
@@ -17,7 +18,7 @@ class _args: pass
 
 WAGE_DAY=5
 DATETIME_FORMAT='%d.%m.%Y'
-DATABASE_PATH='postgresql://usr:123@localhost'
+DEFAULT_DB_PATH='postgresql://usr:123@localhost'
 
 def get_closest_wage_dates(now):
     if now.day < WAGE_DAY:
@@ -57,34 +58,37 @@ class UT1(unittest.TestCase):
 
 
 def expenses_calendar(self, expenses_by_day):
-    all_curs = {tr.currency for d, trs in expenses_by_day.items() for tr in trs}
+    all_curs = {tr.currency for _, trs in expenses_by_day.items() for tr in trs}
 
     def make_sum(trs):
         _sum = {cur : sum([tr.amount for tr in trs if tr.currency == cur]) for cur in all_curs}
         return ','.join([f"{s:6.2f} {c}" for c,s in _sum.items() if abs(s) > 0])
 
     spd_rows = [] # [(d,v,c)]
-    cwod = 0
+    # cwod = 0
     crow = []
-    for d,trs in sorted(expenses_by_day.items(),  key=lambda kv: kv[0]):
-        while cwod < d.weekday():
+    delta = datetime.timedelta(days=1)
+    start_date = min(expenses_by_day.keys())
+    while start_date.weekday() > 0:
+        start_date -= delta
+    end_date = max(expenses_by_day.keys())
+    while end_date.weekday() < 6:
+        end_date += delta
+
+    while start_date <= end_date:
+        if start_date in expenses_by_day:
+            trs = expenses_by_day[start_date]
+            crow += [(start_date.day, make_sum(trs), self.tr_format_html(list(sorted(trs, key=lambda kv: kv.amount))) )]
+        else:
             crow += [(None,None,None)]
-            cwod += 1
-        crow += [(d.day, make_sum(trs), self.tr_format_html(list(sorted(trs, key=lambda kv: kv.amount))) )]
-        if cwod >= 6:
+
+        if start_date.weekday() >= 6:
             spd_rows += [crow]
             crow = []
-            cwod = 0
-        else:
-            cwod += 1
-    if len(crow) > 0:
-        while cwod <= 6:
-            crow += [(None,None,None)]
-            cwod += 1
-        spd_rows += [crow]
+        start_date += delta
 
     def _make_row(_cur):
-        by_day_sums = [sum([tr.amount for tr in trs if tr.currency == _cur]) for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
+        by_day_sums = [sum([tr.amount for tr in trs if tr.currency == _cur]) for _,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
         return [f'by day,{_cur}'] + by_day_sums + [np.mean(by_day_sums[-7:])]
     
     rows = [ _make_row(_cur) for _cur in all_curs] 
@@ -102,7 +106,7 @@ def index():
         args.after = datetime.datetime.strptime(req_args_after, DATETIME_FORMAT)
         args.before = datetime.datetime.strptime(req_args_before, DATETIME_FORMAT)
 
-    args.db = DATABASE_PATH
+    args.db = g_args.db
 
     self = Main(args)
     en = self.read_database()
@@ -167,7 +171,7 @@ def upload():
 
             args = _args()
             args.csvdir = app.config['UPLOAD_FOLDER']
-            args.database = DATABASE_PATH
+            args.database = g_args.db
             um = UpdateMain(args)
 
             s = StringIO()
@@ -195,5 +199,8 @@ def upload():
     """
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--db', default=DEFAULT_DB_PATH)
+    g_args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
     app.run(host="0.0.0.0")

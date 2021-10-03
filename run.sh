@@ -4,4 +4,4 @@
     . env3/bin/activate && python -m pip install -r requirements.txt
 }
 . env3/bin/activate
-python app.py
+python app.py $@
