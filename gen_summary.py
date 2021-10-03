@@ -24,6 +24,9 @@ class trs_t(db_base_t):
     descr = sq.Column(sq.UnicodeText, nullable=False)
     ahash = sq.Column(sq.String,  unique=True, index=True, nullable=False)
 
+    def __repr__(self) -> str:
+        return f"id {self.id} acc {self.account} curr {self.currency} adate {self.adate} amnt {self.amount} hash {self.ahash} descr {self.descr}"
+
 class _uni_t:
     def __init__(self):
         self.account = None

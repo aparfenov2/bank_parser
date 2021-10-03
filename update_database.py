@@ -103,6 +103,7 @@ class Main(_Main):
                     #     cursor.execute("INSERT INTO trs ({}) VALUES ({})" \
                     #         .format(", ".join(not_none), ", ".join([":"+f for f in not_none])), vc)
                     # conn.commit()
+                        self.logger.info(f"add new transaction {item}")
                         session.add(item)
                         session.commit()
                 except Exception:
