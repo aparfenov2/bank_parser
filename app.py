@@ -170,7 +170,7 @@ def upload():
             args.database = DATABASE_PATH
             um = UpdateMain(args)
 
-            s = StringIO.StringIO()
+            s = StringIO()
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
             streamhandler = logging.StreamHandler(s)
             streamhandler.setFormatter(formatter)
