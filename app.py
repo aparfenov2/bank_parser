@@ -184,7 +184,8 @@ def upload():
             memoryhandler.close()
 
         # return flask.redirect("/upload")
-        return f"imported {[f.filename for f in files]} {s.getvalue().replace('\n','<br>')}"
+        output = s.getvalue().replace('\n','<br>')
+        return f"imported {[f.filename for f in files]} {output}"
     else:
         return """
 <form method="POST" enctype="multipart/form-data" action="/upload">
