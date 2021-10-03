@@ -22,7 +22,7 @@ class trs_t(db_base_t):
     adate = sq.Column(sq.DateTime, nullable=False)
     amount = sq.Column(sq.Float, nullable=False)
     descr = sq.Column(sq.UnicodeText, nullable=False)
-    ahash = sq.Column(sq.String,  nullable=False)
+    ahash = sq.Column(sq.String,  unique=True, index=True, nullable=False)
 
 class _uni_t:
     def __init__(self):
@@ -101,7 +101,9 @@ class Main:
 
         # with sqlite3.connect(self.args.db) as conn:
         with Session() as session:
-            items = session.query(trs_t).filter(trs_t.adate.between(self.args.after, self.args.before))
+            items = session.query(trs_t) \
+                .filter(trs_t.adate.between(self.args.after, self.args.before)) \
+                .order_by(trs_t.adate)
             # vc = {
             #     'after' : self.args.after,
             #     'before' : self.args.before
