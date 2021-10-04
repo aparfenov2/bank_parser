@@ -68,10 +68,10 @@ def expenses_calendar(self, expenses_by_day):
     # cwod = 0
     crow = []
     delta = datetime.timedelta(days=1)
-    start_date = min(expenses_by_day.keys())
+    start_date = min(expenses_by_day.keys()) if len(expenses_by_day) > 0 else datetime.datetime.now()
     while start_date.weekday() > 0:
         start_date -= delta
-    end_date = max(expenses_by_day.keys())
+    end_date = max(expenses_by_day.keys()) if len(expenses_by_day) > 0 else datetime.datetime.now()
     while end_date.weekday() < 6:
         end_date += delta
 
