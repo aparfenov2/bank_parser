@@ -10,6 +10,7 @@ import logging
 import logging.handlers
 from io import StringIO
 import argparse
+import requests
 
 app = flask.Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'upload'
@@ -95,8 +96,38 @@ def expenses_calendar(self, expenses_by_day):
 
     return spd_rows, ', '.join([f"{r[-1]:6.2f} {c}/day" for c,r in zip(all_curs,rows)])
 
+def _proxy(*args, **kwargs):
+    resp = requests.request(
+        method=flask.request.method,
+        url=flask.request.url.replace(flask.request.host_url, 'http://localhost:3000/'),
+        headers={key: value for (key, value) in flask.request.headers if key != 'Host'},
+        data=flask.request.get_data(),
+        cookies=flask.request.cookies,
+        allow_redirects=False)
+    excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+    headers = [(name, value) for (name, value) in resp.raw.headers.items()
+               if name.lower() not in excluded_headers]
+
+    response = flask.Response(resp.content, resp.status_code, headers)
+    return response
+
 @app.route('/')
-def index():
+@app.route('/<path:root_path>')
+@app.route('/static/js/<path:js_path>')
+@app.route('/static/css/<path:css_path>')
+def on_index(root_path=None, js_path=None, css_path=None):
+    if g_args.devel:
+        return _proxy()
+    if js_path is not None:
+        return app.send_static_file('js/'+js_path)
+    if css_path is not None:
+        return app.send_static_file('css/'+css_path)
+    if root_path is not None:
+        return flask.send_from_directory("public_prod", root_path)
+    return flask.send_from_directory("public_prod", "index.html")
+
+@app.route('/query')
+def on_query():
     req_args_after = flask.request.args.get('after')
     req_args_before = flask.request.args.get('before')
     args = _args()
@@ -125,7 +156,7 @@ def index():
     prev_after, prev_before = get_closest_wage_dates(args.after - datetime.timedelta(days=1))
     next_after, next_before = get_closest_wage_dates(args.before + datetime.timedelta(days=1))
 
-    data = {        
+    data = {
         'rows':rows, 
         'headers':headers, 
         'acc_curs':acc_curs, 
@@ -141,11 +172,11 @@ def index():
         'spd_rows' : spd_rows,
         '7_avg' : avg_7
         }
+    return data
 
-    # html = self.do_htmlout(
-    #     self.printable_speed(expenses_by_day, printable=False), 
-    #     self.printable_summary(by_cat, printable=False)
-    #     )
+@app.route('/old_index')
+def on_old_index():
+    data = on_query()
     tm = Template(filename="templates/summary.html")
     return tm.render(data=data)
 
@@ -201,6 +232,11 @@ def upload():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', default=DEFAULT_DB_PATH)
+    parser.add_argument('--devel', action='store_true')
     g_args,_ = parser.parse_known_args()
     logging.basicConfig(level=logging.INFO)
-    app.run(host="0.0.0.0")
+    if g_args.devel:
+        # from http.client import HTTPConnection
+        # HTTPConnection.debuglevel = 1
+        logging.info("--devel is set. Will forward requests to nodejs.")
+    app.run(host="0.0.0.0", debug=True)
