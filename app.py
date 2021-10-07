@@ -126,6 +126,18 @@ def on_index(root_path=None, js_path=None, css_path=None):
         return flask.send_from_directory("public_prod", root_path)
     return flask.send_from_directory("public_prod", "index.html")
 
+
+@app.route('/ranges')
+def on_ranges():
+    now = datetime.datetime.now()
+    data = []
+    after, before = get_closest_wage_dates(now)
+    data += [(after - now).days]
+    while (now - after).days < 124:
+        after, before = get_closest_wage_dates(after - datetime.timedelta(days=1))
+        data += [(after-now).days]
+    return {'ranges':data}
+
 @app.route('/query')
 def on_query():
     req_args_after = flask.request.args.get('after')

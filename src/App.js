@@ -18,26 +18,43 @@ import {
 import './App.css';
 
 function valuetext(value) {
-    return `${value}°C`;
+    return new Date(new Date().setDate(new Date().getDate() + parseInt(value))).toDateString();
 }
 
-const minDistance = 10;
+function MinimumDistanceSlider(props) {
 
-function MinimumDistanceSlider() {
+    const minDistance = 1;
+    // setValue2 = props.setValue
 
-    const [value2, setValue2] = React.useState([20, 37]);
+    const [value2, setValue2] = React.useState([-30, 0]);
+
+    const [marks, setMarks] = React.useState([]);
+
+
+    React.useEffect(() => {
+        const fetchData = async () => {
+            const result = await axios("/ranges");
+            setMarks(result.data.ranges.map(d => {
+                return {
+                    value: d,
+                    label: valuetext(d)
+                }
+            }));
+        };
+        fetchData();
+    }, []);
 
     const handleChange2 = (event, newValue, activeThumb) => {
         if (!Array.isArray(newValue)) {
             return;
         }
 
-        if (newValue[1] - newValue[0] < minDistance) {
+        if (Math.abs(newValue[1] - newValue[0]) < minDistance) {
             if (activeThumb === 0) {
-                const clamped = Math.min(newValue[0], 100 - minDistance);
+                const clamped = Math.min(newValue[0], 0 - minDistance);
                 setValue2([clamped, clamped + minDistance]);
             } else {
-                const clamped = Math.max(newValue[1], minDistance);
+                const clamped = Math.max(newValue[1], -124 + minDistance);
                 setValue2([clamped - minDistance, clamped]);
             }
         } else {
@@ -49,9 +66,12 @@ function MinimumDistanceSlider() {
         <Slider
             getAriaLabel={() => 'Minimum distance shift'}
             value={value2}
+            min={-124}
+            max={0}
+            marks={marks}
             onChange={handleChange2}
-            valueLabelDisplay="auto"
-            getAriaValueText={valuetext}
+            valueLabelDisplay="on"
+            valueLabelFormat={valuetext}
             disableSwap
         />
     );
@@ -199,6 +219,7 @@ function Home() {
                     <NavTable data={ajax_data} onLinkClick={onLinkClick} />
                 </Box>
                 <MinimumDistanceSlider />
+                <Box sx={{ width: 100 }}/>
             </Stack>
             <ByDayTable data={ajax_data} />
             <SummaryTable data={ajax_data} />
