@@ -3,6 +3,9 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import Typography from '@mui/material/Typography';
 import axios from 'axios'
 // import logo from './logo.svg';
 
@@ -36,14 +39,14 @@ function MinimumDistanceSlider(props) {
     // transform from date string to relative days
     const value2 = value.map(_date => {
         if (_date != null) {
-            return Math.round(DateTime.fromFormat(_date, DATE_FORMAT).diff(DateTime.now().startOf('day'),'days').as('days'));
+            return Math.round(DateTime.fromFormat(_date, DATE_FORMAT).diff(DateTime.now().startOf('day'), 'days').as('days'));
         } else {
             return 0;
         }
     });
     // console.log("value",value);
     // transform from relative days to date str
-    const setValue2 = function(days) {
+    const setValue2 = function (days) {
         setValue(days.map(day => valuetext(day)));
     };
 
@@ -208,13 +211,47 @@ function NavTable(props) {
                     <td> <Link to="/" onClick={onLinkClick}>Last Period</Link> </td>
                 </tr>
                 <tr>
-                    <td> <Link to="/upload" onClick={(e)=> {window.location.href = e.target.href}}>Upload</Link> </td>
+                    <td> <Link to="/upload" onClick={(e) => { window.location.href = e.target.href }}>Upload</Link> </td>
                 </tr>
             </tbody>
         </table>
     )
 }
 
+
+function TabPanel(props) {
+    const { children, value, index, ...other } = props;
+  
+    return (
+      <div
+        role="tabpanel"
+        hidden={value !== index}
+        id={`simple-tabpanel-${index}`}
+        aria-labelledby={`simple-tab-${index}`}
+        {...other}
+      >
+        {value === index && (
+          <Box sx={{ p: 3 }}>
+            <Typography>{children}</Typography>
+          </Box>
+        )}
+      </div>
+    );
+  }
+  
+//   TabPanel.propTypes = {
+//     children: PropTypes.node,
+//     index: PropTypes.number.isRequired,
+//     value: PropTypes.number.isRequired,
+//   };
+  
+  function a11yProps(index) {
+    return {
+      id: `simple-tab-${index}`,
+      'aria-controls': `simple-tabpanel-${index}`,
+    };
+  }
+  
 
 function Home() {
     const location = useLocation();
@@ -230,6 +267,13 @@ function Home() {
     const [ajax_data, setData] = React.useState(query_args);
     const ajax_query = "/query" + location.search;
 
+    // Tabs
+    const [value, setValue] = React.useState(0);
+
+    const handleChange = (event, newValue) => {
+      setValue(newValue);
+    };
+  
     React.useEffect(() => {
         const fetchData = async () => {
             const result = await axios(ajax_query);
@@ -249,21 +293,36 @@ function Home() {
                     <NavTable data={ajax_data} />
                 </Box>
                 <MinimumDistanceSlider value={slider_value} setValue={setSliderValue} onChangeCommitted={onSliderDragStop} />
-                <Box sx={{ width: 100 }}/>
+                <Box sx={{ width: 100 }} />
             </Stack>
-            <ByDayTable data={ajax_data} />
-            <SummaryTable data={ajax_data} />
+            <Box sx={{ width: '100%' }}>
+                <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                    <Tabs value={value} onChange={handleChange} aria-label="basic tabs example">
+                    <Tab label="Calendar" {...a11yProps(0)} />
+                    <Tab label="Summary" {...a11yProps(1)} />
+                    <Tab label="Pie Chart" {...a11yProps(2)} />
+                    </Tabs>
+                </Box>
+                <TabPanel value={value} index={0}>
+                    <ByDayTable data={ajax_data} />
+                </TabPanel>
+                <TabPanel value={value} index={1}>
+                    <SummaryTable data={ajax_data} />
+                </TabPanel>
+                <TabPanel value={value} index={3}>
+                    <a>Pie chart</a>
+                </TabPanel>
+            </Box>
         </Stack>
     );
 }
-
 
 function App() {
     return (
         <Router>
             <Switch>
                 <Route path="/">
-                    <Home/>
+                    <Home />
                 </Route>
             </Switch>
         </Router>
