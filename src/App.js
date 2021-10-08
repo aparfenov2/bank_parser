@@ -12,21 +12,39 @@ import {
     Route,
     Link,
     useLocation,
-    useHistory
 } from "react-router-dom";
 
 import './App.css';
 
+const { DateTime } = require("luxon");
+
+const DATE_FORMAT = "dd.LL.yyyy"
+
 function valuetext(value) {
-    return new Date(new Date().setDate(new Date().getDate() + parseInt(value))).toDateString();
+    return DateTime.now().minus({ days: -value }).toFormat(DATE_FORMAT);
+    // return new Date(new Date().setDate(new Date().getDate() + parseInt(value))).toDateString();
 }
 
 function MinimumDistanceSlider(props) {
 
     const minDistance = 1;
-    // setValue2 = props.setValue
 
-    const [value2, setValue2] = React.useState([-30, 0]);
+    // const [value2, setValue2] = React.useState([-30, 0]);
+    const [value, setValue] = [props.value, props.setValue]
+
+    // transform from date string to relative days
+    let value2 = value.map(_date => {
+        if (_date != null) {
+            return Math.round(DateTime.fromFormat(_date, DATE_FORMAT).diff(DateTime.now().startOf('day'),'days').as('days'));
+        } else {
+            return 0;
+        }
+    });
+    // console.log("value",value);
+    // transform from relative days to date str
+    let setValue2 = function(days) {
+        setValue(days.map(day => valuetext(day)));
+    };
 
     const [marks, setMarks] = React.useState([]);
 
@@ -169,20 +187,26 @@ function SummaryTable(props) {
 function NavTable(props) {
     let data = props.data;
 
+    const onLinkClick = (e) => {
+        if (props.onLinkClick != null) {
+            props.onLinkClick(e.target.search);
+        }
+    };
+
     return (
         <table width="100%">
             <tbody>
                 <tr>
-                    <td> <Link to={"?after=" + data['prev_after'] + "&before=" + data['prev_before']} onClick={props.onLinkClick}>Prev Period {data['prev_after']} - {data['prev_before']}</Link> </td>
+                    <td> <Link to={"?after=" + data['prev_after'] + "&before=" + data['prev_before']} onClick={onLinkClick}>Prev Period {data['prev_after']} - {data['prev_before']}</Link> </td>
                 </tr>
                 <tr>
-                    <td> <Link to={"?after=" + data['next_after'] + "&before=" + data['next_before']} onClick={props.onLinkClick}>Next Period {data['next_after']} - {data['next_before']}</Link> </td>
+                    <td> <Link to={"?after=" + data['next_after'] + "&before=" + data['next_before']} onClick={onLinkClick}>Next Period {data['next_after']} - {data['next_before']}</Link> </td>
                 </tr>
                 <tr>
-                    <td> <Link to="/" onClick={props.onLinkClick}>Last Period</Link> </td>
+                    <td> <Link to="/" onClick={onLinkClick}>Last Period</Link> </td>
                 </tr>
                 <tr>
-                    <td> <Link to="/upload">Upload</Link> </td>
+                    <td> <Link to="/upload" onClick={(e)=> {window.location.href = e.target.href}}>Upload</Link> </td>
                 </tr>
             </tbody>
         </table>
@@ -193,32 +217,30 @@ function NavTable(props) {
 function Home() {
     let location = useLocation();
     let query_args = Object.fromEntries(new URLSearchParams(location.search));
+    const [slider_value, setSliderValue] = React.useState([query_args['after'], query_args['before']]);
 
     const [ajax_data, setData] = React.useState(query_args);
-    const [ajax_query, setQuery] = React.useState("/query" + location.search);
-
-    const onLinkClick = (e) => {
-        // e.preventDefault();
-        setQuery("/query" + e.target.search)
-    };
+    const ajax_query = "/query" + location.search;
 
     React.useEffect(() => {
         const fetchData = async () => {
             const result = await axios(ajax_query);
             setData(result.data);
+            const current_range = [result.data['after'], result.data['before']];
+            setSliderValue(current_range);
         };
 
         fetchData();
-    }, [ajax_query, location]);
+    }, [ajax_query]);
 
     return (
         <Stack spacing={3}>
             <center>Summary {ajax_data['after']} - {ajax_data['before']}</center>
             <Stack direction="row" spacing={1}>
                 <Box width={600}>
-                    <NavTable data={ajax_data} onLinkClick={onLinkClick} />
+                    <NavTable data={ajax_data} />
                 </Box>
-                <MinimumDistanceSlider />
+                <MinimumDistanceSlider value={slider_value} setValue={setSliderValue} />
                 <Box sx={{ width: 100 }}/>
             </Stack>
             <ByDayTable data={ajax_data} />
@@ -228,19 +250,10 @@ function Home() {
 }
 
 
-function Upload() {
-    return (
-        <a>Not Implemented</a>
-    );
-}
-
 function App() {
     return (
         <Router>
             <Switch>
-                <Route path="/upload">
-                        <Upload/>
-                    </Route>
                 <Route path="/">
                     <Home/>
                 </Route>
