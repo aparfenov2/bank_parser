@@ -12,6 +12,7 @@ import {
     Route,
     Link,
     useLocation,
+    useHistory
 } from "react-router-dom";
 
 import './App.css';
@@ -33,7 +34,7 @@ function MinimumDistanceSlider(props) {
     const [value, setValue] = [props.value, props.setValue]
 
     // transform from date string to relative days
-    let value2 = value.map(_date => {
+    const value2 = value.map(_date => {
         if (_date != null) {
             return Math.round(DateTime.fromFormat(_date, DATE_FORMAT).diff(DateTime.now().startOf('day'),'days').as('days'));
         } else {
@@ -42,7 +43,7 @@ function MinimumDistanceSlider(props) {
     });
     // console.log("value",value);
     // transform from relative days to date str
-    let setValue2 = function(days) {
+    const setValue2 = function(days) {
         setValue(days.map(day => valuetext(day)));
     };
 
@@ -88,6 +89,7 @@ function MinimumDistanceSlider(props) {
             max={0}
             marks={marks}
             onChange={handleChange2}
+            onChangeCommitted={props.onChangeCommitted}
             valueLabelDisplay="on"
             valueLabelFormat={valuetext}
             disableSwap
@@ -106,7 +108,7 @@ function ByDayTable(props) {
     //     // setData(props.data['spd_rows']);
     //   }, [props.data]);
 
-    // let data = props.data['spd_rows']
+    // const data = props.data['spd_rows']
     return (
         <table className="cart">
             <thead>
@@ -121,7 +123,7 @@ function ByDayTable(props) {
                 {props.data['spd_rows'] && props.data['spd_rows'].map((row, r_inx) =>
                     <tr key={r_inx}>
                         {row.map((r, c_inx) => {
-                            let [d, v, com] = r
+                            const [d, v, com] = r
                             if (d == null) {
                                 return <td key={c_inx} />
                             } else {
@@ -152,7 +154,7 @@ function zip_longest() {
 }
 
 function SummaryTable(props) {
-    let data = props.data;
+    const data = props.data;
     return (
         <table className="cart">
             <thead>
@@ -165,11 +167,11 @@ function SummaryTable(props) {
 
             <tbody>
                 {data['rows'] && zip_longest(data['rows'], data['_com']).map((row_row_c, inx_r) => {
-                    let [row, row_c] = row_row_c
+                    const [row, row_c] = row_row_c
                     return (
                         <tr key={inx_r}>
                             {zip_longest(row, row_c != null ? row_c : []).map((v_com, c_inx) => {
-                                let [v, com] = v_com
+                                const [v, com] = v_com
                                 return (
                                     <td key={c_inx} className="hasTooltip">{v}
                                         {com != null && <span className="tooltip" dangerouslySetInnerHTML={{ __html: com }} />}
@@ -185,7 +187,7 @@ function SummaryTable(props) {
 }
 
 function NavTable(props) {
-    let data = props.data;
+    const data = props.data;
 
     const onLinkClick = (e) => {
         if (props.onLinkClick != null) {
@@ -215,9 +217,15 @@ function NavTable(props) {
 
 
 function Home() {
-    let location = useLocation();
-    let query_args = Object.fromEntries(new URLSearchParams(location.search));
+    const location = useLocation();
+    const history = useHistory();
+
+    const query_args = Object.fromEntries(new URLSearchParams(location.search));
     const [slider_value, setSliderValue] = React.useState([query_args['after'], query_args['before']]);
+
+    const onSliderDragStop = () => {
+        history.push("?after=" + slider_value[0] + "&before=" + slider_value[1]);
+    }
 
     const [ajax_data, setData] = React.useState(query_args);
     const ajax_query = "/query" + location.search;
@@ -240,7 +248,7 @@ function Home() {
                 <Box width={600}>
                     <NavTable data={ajax_data} />
                 </Box>
-                <MinimumDistanceSlider value={slider_value} setValue={setSliderValue} />
+                <MinimumDistanceSlider value={slider_value} setValue={setSliderValue} onChangeCommitted={onSliderDragStop} />
                 <Box sx={{ width: 100 }}/>
             </Stack>
             <ByDayTable data={ajax_data} />
