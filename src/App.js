@@ -9,6 +9,15 @@ import Typography from '@mui/material/Typography';
 import axios from 'axios'
 // import logo from './logo.svg';
 
+import PieChart, {
+    Series,
+    Label,
+    Connector,
+    Size,
+    Export
+  } from 'devextreme-react/pie-chart';
+  
+
 import {
     BrowserRouter as Router,
     Switch,
@@ -18,7 +27,10 @@ import {
     useHistory
 } from "react-router-dom";
 
+// CSS
 import './App.css';
+import 'devextreme/dist/css/dx.light.css';
+
 
 const { DateTime } = require("luxon");
 
@@ -251,7 +263,47 @@ function TabPanel(props) {
       'aria-controls': `simple-tabpanel-${index}`,
     };
   }
-  
+
+
+function PieChartPage(props) {
+    // if (props.data == null || !('by_acc_cur' in props.data)) {
+    //     return null
+    // }
+
+    const data = Object.entries(props.data['by_acc_cur']).filter(([k, v]) => {
+            return "total" in v;
+        }).map(([k, v]) => {
+            // console.log(k, v['total']);
+            return {
+                "category": k,
+                "total" : parseFloat(v['total'])
+            }
+        });
+
+    return (
+    <PieChart
+        id="pie"
+        dataSource={data}
+        palette="Bright"
+        title="Expenses"
+        // onPointClick={this.pointClickHandler}
+        // onLegendClick={this.legendClickHandler}
+      >
+        <Series
+          argumentField="category"
+          valueField="total"
+        >
+          <Label visible={true}>
+            <Connector visible={true} width={1} />
+          </Label>
+        </Series>
+
+        <Size width={500} />
+        <Export enabled={false} />
+      </PieChart>
+    )
+}
+
 
 function Home() {
     const location = useLocation();
@@ -309,8 +361,8 @@ function Home() {
                 <TabPanel value={value} index={1}>
                     <SummaryTable data={ajax_data} />
                 </TabPanel>
-                <TabPanel value={value} index={3}>
-                    <a>Pie chart</a>
+                <TabPanel value={value} index={2}>
+                    <PieChartPage data={ajax_data}/>
                 </TabPanel>
             </Box>
         </Stack>

@@ -19,3 +19,11 @@ table, th, td {
     border: 1px solid #CCC;
     margin: 2px 10px;
 }    
+
+#pie {
+    height: 440px;
+}
+
+#pie * {
+    margin: 0 auto;
+}
