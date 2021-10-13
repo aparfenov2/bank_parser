@@ -115,15 +115,14 @@ def _proxy(*args, **kwargs):
 @app.route('/<path:root_path>')
 @app.route('/static/js/<path:js_path>')
 @app.route('/static/css/<path:css_path>')
-def on_index(root_path=None, js_path=None, css_path=None):
+@app.route('/static/media/<path:media_path>')
+def on_index(**kwargs):
     if g_args.devel:
         return _proxy()
-    if js_path is not None:
-        return app.send_static_file('js/'+js_path)
-    if css_path is not None:
-        return app.send_static_file('css/'+css_path)
-    if root_path is not None:
-        return flask.send_from_directory("public_prod", root_path)
+    for path_name, path in kwargs.items():
+        if path_name == 'root_path':
+            return flask.send_from_directory("public_prod", path_name)
+        return app.send_static_file(f"{path_name.split('_')[0]}/{path}")
     return flask.send_from_directory("public_prod", "index.html")
 
 
@@ -137,6 +136,16 @@ def on_ranges():
         after, before = get_closest_wage_dates(after - datetime.timedelta(days=1))
         data += [(after-now).days]
     return {'ranges':data}
+
+@app.route('/conf', methods=['GET','PUT'])
+def on_conf():
+    if flask.request.method == "GET":
+        return "some config file content"
+    else:
+        conf = flask.request.data.decode('utf-8')
+        logging.info(f"updating conf = {conf}")
+        # update conf
+        return "OK"
 
 @app.route('/query')
 def on_query():

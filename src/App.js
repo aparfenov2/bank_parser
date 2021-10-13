@@ -1,5 +1,5 @@
 // import * as React from 'react';
-import React from 'react';
+import React, { useState } from 'react';
 import Box from '@mui/material/Box';
 import Slider from '@mui/material/Slider';
 import Stack from '@mui/material/Stack';
@@ -27,12 +27,23 @@ import {
     useHistory
 } from "react-router-dom";
 
+import MonacoEditor from '@uiw/react-monacoeditor';
+
+// import { JsonEditor as Editor } from 'jsoneditor-react';
+// import Ajv from 'ajv';
+// import ace from 'brace';
+// import 'brace/mode/json';
+// import 'brace/theme/github';
+// import JSONInput from 'react-json-editor-ajrm';
+// import locale    from 'react-json-editor-ajrm/locale/en';
 // CSS
 import './App.css';
 import 'devextreme/dist/css/dx.light.css';
+// import 'jsoneditor-react/es/editor.min.css';
 
 
 const { DateTime } = require("luxon");
+// const ajv = new Ajv({ allErrors: true, verbose: true });
 
 const DATE_FORMAT = "dd.LL.yyyy"
 
@@ -304,6 +315,53 @@ function PieChartPage(props) {
     )
 }
 
+function ConfigPage() {
+    const [conf, setConf] = useState("");
+    
+    const handleChange = (e) => {
+        console.log("new config", e);
+        setConf(e);
+        const config = {
+            headers: {
+                'Content-Type': 'text/plain'
+            },
+           responseType: 'text'
+        };        
+        axios.put('/conf', e, config);
+    }
+
+    React.useEffect(() => {
+        const fetchData = async () => {
+            const result = await axios("/conf");
+            setConf(result.data);
+        };
+
+        fetchData();
+    }, []);
+
+
+    return (
+
+        <MonacoEditor
+            value={conf}
+            onChange={handleChange}
+            language="yaml"
+            height="200px"
+            options={{
+                theme: 'vs-dark',
+            }}
+        />
+        // <JSONInput
+        //         id          = 'a_unique_id'
+        //         placeholder = { confJson }
+        //         // colors      = { darktheme }
+        //         theme       = {"light_mitsuketa_tribute"}
+        //         locale      = { locale }
+        //         width      = '100%'
+        //         height      = '200px'
+        //     />
+    )
+}
 
 function Home() {
     const location = useLocation();
@@ -353,6 +411,7 @@ function Home() {
                     <Tab label="Calendar" {...a11yProps(0)} />
                     <Tab label="Summary" {...a11yProps(1)} />
                     <Tab label="Pie Chart" {...a11yProps(2)} />
+                    <Tab label="Config" {...a11yProps(3)} />
                     </Tabs>
                 </Box>
                 <TabPanel value={value} index={0}>
@@ -363,6 +422,9 @@ function Home() {
                 </TabPanel>
                 <TabPanel value={value} index={2}>
                     <PieChartPage data={ajax_data}/>
+                </TabPanel>
+                <TabPanel value={value} index={3}>
+                    <ConfigPage/>
                 </TabPanel>
             </Box>
         </Stack>
