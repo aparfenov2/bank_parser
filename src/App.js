@@ -320,7 +320,7 @@ function ConfigPage() {
     
     const handleChange = (e) => {
         console.log("new config", e);
-        setConf(e);
+        // setConf(e);
         const config = {
             headers: {
                 'Content-Type': 'text/plain'
@@ -346,20 +346,11 @@ function ConfigPage() {
             value={conf}
             onChange={handleChange}
             language="yaml"
-            height="200px"
+            height="400px"
             options={{
                 theme: 'vs-dark',
             }}
         />
-        // <JSONInput
-        //         id          = 'a_unique_id'
-        //         placeholder = { confJson }
-        //         // colors      = { darktheme }
-        //         theme       = {"light_mitsuketa_tribute"}
-        //         locale      = { locale }
-        //         width      = '100%'
-        //         height      = '200px'
-        //     />
     )
 }
 

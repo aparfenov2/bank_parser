@@ -11,6 +11,7 @@ import itertools
 from mako.template import Template
 import sqlalchemy as sq
 from table_defs import trs_t
+import yaml
 
 class _uni_t:
     def __init__(self):
@@ -54,6 +55,15 @@ class Main:
 
     def  __init__(self, args):
         self.args = args
+        if hasattr(self.args, 'config_file'):
+            try:
+                with open(self.args.config_file,'r') as f:
+                    new_conf = yaml.safe_load(f)
+                    for k,v in new_conf.items():
+                        setattr(self.args, k, v)
+            except Exception:
+                logging.exception('')
+                
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def read_datadir(self):
@@ -171,23 +181,27 @@ class Main:
 
         if tr.amount > 0:
             return 'income'
-
-        cat_defs = {
-            'sadik' : [r'Парфенов\s+Сергей'],
-            'kv' : [r'в пользу"ЧЕЛЯБИНВЕСТБАНК"'],
-            'kv_otop' : [r'RU GOROD74.RU'],
-            'cash' : [r'Alfa Iss'],
-            'dolina' : [r'DOLINA'],
-            'molnia' : [r'MOLNIA'],
-            'taxi' : [r'TAXI'],
-            'eats' : [r'MAGNIT', r'PYATEROCHKA',r'Магазины продуктовые'],
-            'to KATE' : [r'на \+79511286005'],
-            'gas' : [r'GAZPROMNEFT',r'AZS', r'АЗС'],
-            'to RUB' : [r'CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL'],
-            'to BYN' : [r'CH Debit BLR MINSK P2P SDBO NO FEE'],
-            'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
-            'Kate eats' : [r'STOLOVAYA VILKA', r'Ресторация'],
-        }
+        
+        if hasattr(self.args,'cat_defs'):
+            cat_defs = self.args.cat_defs
+        else:
+            self.logger.warning('using default cat_defs')
+            cat_defs = {
+                'sadik' : [r'Парфенов\s+Сергей'],
+                'kv' : [r'в пользу"ЧЕЛЯБИНВЕСТБАНК"'],
+                'kv_otop' : [r'RU GOROD74.RU'],
+                'cash' : [r'Alfa Iss'],
+                'dolina' : [r'DOLINA'],
+                'molnia' : [r'MOLNIA'],
+                'taxi' : [r'TAXI'],
+                'eats' : [r'MAGNIT', r'PYATEROCHKA',r'Магазины продуктовые'],
+                'to KATE' : [r'на \+79511286005'],
+                'gas' : [r'GAZPROMNEFT',r'AZS', r'АЗС'],
+                'to RUB' : [r'CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL'],
+                'to BYN' : [r'CH Debit BLR MINSK P2P SDBO NO FEE'],
+                'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
+                'Kate eats' : [r'STOLOVAYA VILKA', r'Ресторация'],
+            }
 
         for cat, regs in cat_defs.items():
             for reg in regs:

@@ -140,11 +140,19 @@ def on_ranges():
 @app.route('/conf', methods=['GET','PUT'])
 def on_conf():
     if flask.request.method == "GET":
-        return "some config file content"
+        try:
+            with open("config.yaml",'r') as f:
+                return f.read()
+        except FileNotFoundError:
+            logging.exception('')
+            return 'no_config_yaml_found:'
     else:
         conf = flask.request.data.decode('utf-8')
-        logging.info(f"updating conf = {conf}")
+        logging.info(f"updating config.yaml with content:")
+        logging.info(conf)
         # update conf
+        with open("config.yaml",'w') as f:
+            f.write(conf)
         return "OK"
 
 @app.route('/query')
@@ -159,6 +167,7 @@ def on_query():
         args.before = datetime.datetime.strptime(req_args_before, DATETIME_FORMAT)
 
     args.db = g_args.db
+    args.config_file = 'config.yaml'
 
     self = Main(args)
     en = self.read_database()
