@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   bank_parser:
-    image: bank_parser
+    image: kan-rt.ddns.net:5043/bank_parser
     build: .
     restart: unless-stopped
     network_mode: host
