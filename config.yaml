@@ -1,0 +1,39 @@
+cat_defs:
+  inet_mobile:
+    - INTERSVYAZ
+    - MegaFon
+    - TELE2
+    - ROSTELECOM
+  sadik : 
+    - Парфенов\s+Сергей
+  kv : 
+    - в пользу"ЧЕЛЯБИНВЕСТБАНК"
+  kv_otop : 
+    - RU GOROD74.RU
+  cash : 
+    - Alfa Iss
+  dolina : 
+    - DOLINA
+  molnia : 
+    - MOLNIA
+  taxi : 
+    - TAXI
+  eats : 
+      - MAGNIT
+      - PYATEROCHKA
+      - Магазины продуктовые
+  to KATE : 
+    - на \+79511286005
+  gas : 
+    - GAZPROMNEFT
+    - AZS
+    - АЗС
+  to RUB : 
+    - CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL
+  to BYN : 
+    - CH Debit BLR MINSK P2P SDBO NO FEE
+  to CREDIT : 
+    - Внутрибанковский перевод между счетами            
+  Kate eats : 
+      - STOLOVAYA VILKA
+      - Ресторация
