@@ -3,5 +3,7 @@ Mako
 tabulate
 flask
 XlsxWriter
-psycopg2
+psycopg2-binary
 sqlalchemy
+pyyaml
+requests

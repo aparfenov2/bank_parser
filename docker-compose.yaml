@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  bank_parser:
+    image: bank_parser
+    build: .
+    restart: unless-stopped
+    network_mode: host
+    command: python3 app.py
+    volumes:
+      - $PWD/config.yaml:/workspace/config.yaml
+  
