@@ -12,6 +12,7 @@ import axios from 'axios'
 import PieChart, {
     Series,
     Label,
+    Legend,
     Connector,
     Size,
     Export
@@ -275,14 +276,44 @@ function TabPanel(props) {
     };
   }
 
-
+//   const useMousePosition = () => {
+//     const [position, setPosition] = React.useState({
+//       clientX: 0,
+//       clientY: 0,
+//     });
+  
+//     const updatePosition = event => {
+//       const { pageX, pageY, clientX, clientY } = event;
+  
+//       setPosition({
+//         clientX,
+//         clientY,
+//       });
+//     };
+  
+//     React.useEffect(() => {
+//       document.addEventListener("mousemove", updatePosition, false);
+//       document.addEventListener("mouseenter", updatePosition, false);
+  
+//       return () => {
+//         document.removeEventListener("mousemove", updatePosition);
+//         document.removeEventListener("mouseenter", updatePosition);
+//       };
+//     }, []);
+  
+//     return position;
+//   };
+  
+  
 function PieChartPage(props) {
     // if (props.data == null || !('by_acc_cur' in props.data)) {
     //     return null
     // }
-
-    const data = Object.entries(props.data['by_acc_cur']).filter(([k, v]) => {
+    
+    const data = Object.entries(props.data['by_acc_cur'])
+        .filter(([_, v]) => {
             return "total" in v;
+
         }).map(([k, v]) => {
             // console.log(k, v['total']);
             return {
@@ -291,27 +322,69 @@ function PieChartPage(props) {
             }
         });
 
-    return (
-    <PieChart
-        id="pie"
-        dataSource={data}
-        palette="Bright"
-        title="Expenses"
-        // onPointClick={this.pointClickHandler}
-        // onLegendClick={this.legendClickHandler}
-      >
-        <Series
-          argumentField="category"
-          valueField="total"
-        >
-          <Label visible={true}>
-            <Connector visible={true} width={1} />
-          </Label>
-        </Series>
+    let data_by_cat = {}
+    data.forEach((e) => {
+        data_by_cat[e['category']] = e['total'];
+    })
+    let data_c = {}
+    Object.entries(props.data['by_acc_cur_c']).forEach(([cat,v]) => {
+        Object.values(v).forEach((v1) => {
+            if (!(cat in data_c)) {
+                data_c[cat] = [v1]
+            } else {
+                data_c[cat].push(v1)
+            }
+        })
+    })
 
-        <Size width={500} />
-        <Export enabled={false} />
-      </PieChart>
+    const [isHovering, setIsHovering] = useState(false);
+    const [hoverCat, setHoverCat] = useState(null);
+
+    const HoverText = () => {
+        console.log(data_c)
+        return (
+            <span dangerouslySetInnerHTML={{ __html: data_c[hoverCat] }} />
+        );
+    };
+        
+    
+    const onPointHoverChanged = (e) => {
+        const point = e.target;
+        const cat = point.data.category;
+        setHoverCat(cat);        
+        setIsHovering(point.isHovered());
+    }
+
+    const customizeLegendText = (e) => {
+        return e.pointName + ' ' + data_by_cat[e.pointName]
+    }
+
+    return (
+    <Stack direction="row" spacing={1}>
+        <PieChart
+            id="pie"
+            dataSource={data}
+            palette="Bright"
+            title="Expenses"
+            onPointHoverChanged={onPointHoverChanged}
+        >
+            <Legend
+                customizeText={customizeLegendText}
+            />
+            <Series
+            argumentField="category"
+            valueField="total"
+            >
+            <Label visible={true}>
+                <Connector visible={true} width={1} />
+            </Label>
+            </Series>
+
+            <Size width={500} />
+            <Export enabled={false} />
+        </PieChart>
+        {isHovering && <HoverText />}
+      </Stack>
     )
 }
 
