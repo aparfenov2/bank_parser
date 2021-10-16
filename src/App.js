@@ -340,10 +340,12 @@ function PieChartPage(props) {
     const [isHovering, setIsHovering] = useState(false);
     const [hoverCat, setHoverCat] = useState(null);
 
-    const HoverText = () => {
-        console.log(data_c)
+    const PieDetails = () => {
         return (
-            <span dangerouslySetInnerHTML={{ __html: data_c[hoverCat] }} />
+            <Stack spacing={2}>
+                <span>{hoverCat}</span>
+                <span dangerouslySetInnerHTML={{ __html: data_c[hoverCat] }} />
+            </Stack>
         );
     };
         
@@ -353,6 +355,13 @@ function PieChartPage(props) {
         const cat = point.data.category;
         setHoverCat(cat);        
         setIsHovering(point.isHovered());
+    }
+
+    const onLegendClick = (e) => {
+        const point = e.target;
+        const cat = point;
+        setHoverCat(cat);        
+        setIsHovering(true);
     }
 
     const customizeLegendText = (e) => {
@@ -367,6 +376,7 @@ function PieChartPage(props) {
             palette="Bright"
             title="Expenses"
             onPointHoverChanged={onPointHoverChanged}
+            onLegendClick={onLegendClick}
         >
             <Legend
                 customizeText={customizeLegendText}
@@ -383,7 +393,7 @@ function PieChartPage(props) {
             <Size width={500} />
             <Export enabled={false} />
         </PieChart>
-        {isHovering && <HoverText />}
+        {isHovering && <PieDetails />}
       </Stack>
     )
 }
