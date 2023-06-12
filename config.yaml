@@ -4,12 +4,14 @@ cat_defs:
     - MegaFon
     - TELE2
     - ROSTELECOM
+  comiss:
+    - Комиссия
   sadik : 
     - Парфенов\s+Сергей
-  kv : 
-    - в пользу"ЧЕЛЯБИНВЕСТБАНК"
   kv_otop : 
     - RU GOROD74.RU
+  kv : 
+    - в пользу"ЧЕЛЯБИНВЕСТБАНК"
   cash : 
     - Alfa Iss
   dolina : 
@@ -28,6 +30,9 @@ cat_defs:
     - GAZPROMNEFT
     - AZS
     - АЗС
+  shopping:
+    - агазины
+
   to RUB : 
     - CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL
   to BYN : 

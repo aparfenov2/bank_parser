@@ -4,8 +4,8 @@ services:
     image: kan-rt.ddns.net:5043/bank_parser
     build: .
     restart: unless-stopped
-    network_mode: host
-    command: python3 app.py
+    command: python3 app.py --db postgresql://usr:123@192.168.0.76
+    ports:
+      - "5050:5000"
     volumes:
       - $PWD/config.yaml:/workspace/config.yaml
-  
