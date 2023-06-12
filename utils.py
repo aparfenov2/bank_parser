@@ -1,4 +1,5 @@
 import csv,re, datetime, os
+import xml.etree.ElementTree as ET
 
 # json -friendly named tuple
 def named_dict(typename, fieldnames):
@@ -77,7 +78,7 @@ def read_transactions(filename):
     start = lookup_header(lines[end:], r'Дата транзакции;Транзакция;Сумма')
     if start is not None:
         start += end
-        read_blocked(lines[start:], start)    
+        read_blocked(lines[start:], start)
 
     return transactions
 
@@ -106,5 +107,36 @@ def read_alfa(filename):
                 transactions.append(alfa_t(account_name, account_num, currency, tstamp, ref, category, amount, os.path.basename(filename), lineno))
             except Exception as e:
                 raise Exception(f"line {lineno}", e)
+
+    return transactions
+
+def read_ofx(filename):
+    transactions = []
+    root = ET.parse(filename)
+    account_name = root.find('./BANKMSGSRSV1/STMTTRNRS/STMTRS/BANKACCTFROM/ACCTID').text
+    account_num = int(account_name)
+    currency = root.find('./BANKMSGSRSV1/STMTTRNRS/STMTRS/CURDEF').text
+    currency = currency.replace('RUR','RUB')
+
+    for elem in root.findall('./BANKMSGSRSV1/STMTTRNRS/STMTRS/BANKTRANLIST/STMTTRN'):
+        isCredit = False
+        if elem.find('TRNTYPE') == 'CREDIT':
+            isCredit = True
+        amount = float(elem.find('TRNAMT').text)
+        if isCredit:
+            amount = -amount
+        category = elem.find('NAME').text
+        tstampStr    = elem.find('DTAVAIL').text
+        ref          = elem.find('FITID').text
+        tstamp       = datetime.datetime(
+            year=int(tstampStr[:4]),
+            month=int(tstampStr[4:6]),
+            day=int(tstampStr[6:8]),
+            hour=int(tstampStr[8:10]),
+            minute=int(tstampStr[10:12]),
+            second=int(tstampStr[12:14]),
+            )
+        currency = 'rub'
+        transactions.append(alfa_t(account_name, account_num, currency, tstamp, ref, category, amount, os.path.basename(filename), 0))
 
     return transactions

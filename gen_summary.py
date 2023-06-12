@@ -1,5 +1,5 @@
 import sys, os, re, datetime, json
-from utils import read_transactions, read_alfa, named_dict
+from utils import read_transactions, read_alfa, named_dict, read_ofx
 import argparse, logging
 from collections import namedtuple, defaultdict
 from typing import List, DefaultDict, Dict, Union
@@ -43,8 +43,8 @@ class Main:
         parser.add_argument('--debug', action='store_true')
         parser.add_argument('--days_after', type=int)
         parser.add_argument('--days_before', type=int)
-        parser.add_argument('--after', required=True,  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
-        parser.add_argument('--before', required=True, type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))        
+        parser.add_argument('--after', required=True,  type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))
+        parser.add_argument('--before', required=True, type=lambda s: datetime.datetime.strptime(s, '%d.%m.%Y'))
         parser.add_argument('--allout', default="transactions.json")
         parser.add_argument('--sumout', default="summary.txt")
         parser.add_argument('--bydayout', default="expenses_by_day.json")
@@ -63,7 +63,7 @@ class Main:
                         setattr(self.args, k, v)
             except Exception:
                 logging.exception('')
-                
+
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def read_datadir(self):
@@ -89,6 +89,11 @@ class Main:
                     self.logger.exception(fullpath)
                     raise
 
+            if f.endswith('.ofx'):
+                fullpath = os.path.join(self.args.csvdir,f)
+                trs = read_ofx(fullpath)
+                yield 'raif', trs
+
     def read_database(self):
         # def regexp(expr, item):
         #     reg = re.compile(expr)
@@ -112,10 +117,10 @@ class Main:
                 tr = uni_t(
                     it.account, # account
                     it.adate,
-                    # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                    # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date
                     it.amount, # amount
                     it.currency, # currency
-                    it.descr, # descr as cat 
+                    it.descr, # descr as cat
                     None
                     )
                 cat = self.get_category(tr)
@@ -123,7 +128,7 @@ class Main:
 
                 # yield uni_t(
                 #     it.account, # account
-                #     # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date 
+                #     # datetime.datetime.strptime(it[1],'%Y-%m-%d %H:%M:%S'), # date
                 #     it.adate,
                 #     it.amount, # amount
                 #     it.currency, # currency
@@ -181,7 +186,7 @@ class Main:
 
         if tr.amount > 0:
             return 'income'
-        
+
         if hasattr(self.args,'cat_defs'):
             cat_defs = self.args.cat_defs
         else:
@@ -199,7 +204,7 @@ class Main:
                 'gas' : [r'GAZPROMNEFT',r'AZS', r'АЗС'],
                 'to RUB' : [r'CH Debit BLR MINSK P2P_SDBO_INTERNATIONAL'],
                 'to BYN' : [r'CH Debit BLR MINSK P2P SDBO NO FEE'],
-                'to CREDIT' : [r'Внутрибанковский перевод между счетами'],            
+                'to CREDIT' : [r'Внутрибанковский перевод между счетами'],
                 'Kate eats' : [r'STOLOVAYA VILKA', r'Ресторация'],
             }
 
@@ -234,9 +239,9 @@ class Main:
             spent_total[tr.currency] += float_and_list_t(tr.amount, [tr])
 
         return {
-            'summary' : summary, 
-            'cat_totals' : cat_totals, 
-            'acc_totals' : acc_totals, 
+            'summary' : summary,
+            'cat_totals' : cat_totals,
+            'acc_totals' : acc_totals,
             'spent_total' : spent_total
             }
 
@@ -269,7 +274,7 @@ class Main:
         total_by_acc = {f"{acc}_{cur}" : f"{v.v:6.2f}" for acc, accd in by_cat['acc_totals'].items() for cur, v in accd.items()}
         total_by_acc['total'] = ",".join([f"{v.v:6.2f} {cur}" for cur, v in by_cat['spent_total'].items()])
 
-        acc_curs = ['usd_USD','usd_BYN', 'byn_BYN','usd_RUB','byn_RUB','rub_RUB','credit_RUB', 'total']
+        acc_curs = ['usd_USD','usd_BYN', 'byn_BYN','usd_RUB','byn_RUB','rub_RUB','raif', 'total']
         headers = ['cat'] + acc_curs
         _sum = [
             ['income'] + [by_acc_cur.get('income',{}).get(acc_cur, '') for acc_cur in acc_curs]
@@ -301,7 +306,7 @@ class Main:
 
         rows, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com = printable
 
-        for i,h in enumerate(headers):            
+        for i,h in enumerate(headers):
             worksheet.write(*self.xlsaddr(i,row_offset+0), h)
 
         for r, (row, row_c) in enumerate(itertools.zip_longest(rows, _com)):
@@ -325,14 +330,14 @@ class Main:
         def _make_row(_cur):
             by_day_sums = [sum([tr.amount for tr in trs if tr.currency == _cur]) for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
             return [f'by day,{_cur}'] + by_day_sums + [np.mean(by_day_sums[-7:])]
-        
-        rows = [ _make_row(_cur) for _cur in all_curs] 
+
+        rows = [ _make_row(_cur) for _cur in all_curs]
 
         def _make_row_c(_cur):
             return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
                 if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
 
-        rows_c = [ _make_row_c(_cur) for _cur in all_curs] 
+        rows_c = [ _make_row_c(_cur) for _cur in all_curs]
 
         return tabulate(rows, headers=headers) if printable else (rows, headers, all_curs, rows_c)
 
@@ -350,7 +355,7 @@ class Main:
         #     return [[self.tr_format(tr) for tr in sorted(trs, key=lambda kv: kv.amount) \
         #         if tr.currency == _cur] for d,trs in sorted(expenses_by_day.items(), key=lambda kv: kv[0])]
 
-        # rowsc = [ _make_row(_cur) for _cur in all_curs] 
+        # rowsc = [ _make_row(_cur) for _cur in all_curs]
 
         for i,h in enumerate(headers):
             # print(i,self.xlsaddr(i,0),h)
@@ -366,15 +371,15 @@ class Main:
     def do_htmlout(self, expenses_by_day_printable, by_cat_printable):
         rows, headers, acc_curs, by_acc_cur, by_acc_cur_c, _com = by_cat_printable
         data = {
-            'rows':rows, 
-            'headers':headers, 
-            'acc_curs':acc_curs, 
-            'by_acc_cur':by_acc_cur, 
-            'by_acc_cur_c':by_acc_cur_c, 
+            'rows':rows,
+            'headers':headers,
+            'acc_curs':acc_curs,
+            'by_acc_cur':by_acc_cur,
+            'by_acc_cur_c':by_acc_cur_c,
             '_com':_com
             }
 
-        # for i,h in enumerate(headers):            
+        # for i,h in enumerate(headers):
         #     worksheet.write(*self.xlsaddr(i,row_offset+0), h)
 
         # for r, (row, row_c) in enumerate(itertools.zip_longest(rows, _com)):
@@ -384,7 +389,7 @@ class Main:
         #             worksheet.write_comment(*self.xlsaddr(c,row_offset+r+1), str(com))
 
         html = """
-<%! import itertools %>        
+<%! import itertools %>
 <!DOCTYPE HTML>
 <html>
 <head>
@@ -406,8 +411,8 @@ class Main:
     background-color: #FFF;
     border: 1px solid #CCC;
     margin: 2px 10px;
-}    
- 
+}
+
    </style>
 </head>
 
@@ -439,7 +444,7 @@ class Main:
     </table>
 </body>
 
-</html>        
+</html>
         """
 
         tm = Template(html)
@@ -484,16 +489,16 @@ class Main:
             workbook = xlsxwriter.Workbook(self.args.xlsout)
             worksheet = workbook.add_worksheet()
 
-            row_offset = self.write_spd_to_excel(worksheet, expenses_by_day, 
+            row_offset = self.write_spd_to_excel(worksheet, expenses_by_day,
                 self.printable_speed(expenses_by_day, printable=False))
-            
-            self.write_summary_to_excel(worksheet, by_cat, 
+
+            self.write_summary_to_excel(worksheet, by_cat,
                 self.printable_summary(by_cat, printable=False), row_offset=row_offset + 2)
-            workbook.close()        
+            workbook.close()
 
         if self.args.htmlout is not None:
             html = self.do_htmlout(
-                self.printable_speed(expenses_by_day, printable=False), 
+                self.printable_speed(expenses_by_day, printable=False),
                 self.printable_summary(by_cat, printable=False)
                 )
             with open(self.args.htmlout, 'w') as out:
@@ -514,7 +519,7 @@ class Main:
         handler.setLevel(logging.INFO if not args.debug else logging.DEBUG)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
-        root.addHandler(handler)        
+        root.addHandler(handler)
 
         Main(args).go()
 
